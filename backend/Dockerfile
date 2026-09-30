@@ -12,7 +12,8 @@ RUN chmod +x gradlew && ./gradlew --no-daemon dependencies -x test || true
 
 COPY src src
 RUN chmod +x gradlew && ./gradlew --no-daemon bootJar -x test \
-    && cp build/libs/feesaas-0.1.0-SNAPSHOT.jar /workspace/app.jar
+    && JAR="$(find build/libs -maxdepth 1 -name '*.jar' ! -name '*-plain.jar' | head -n 1)" \
+    && test -n "$JAR" && cp "$JAR" /workspace/app.jar
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
