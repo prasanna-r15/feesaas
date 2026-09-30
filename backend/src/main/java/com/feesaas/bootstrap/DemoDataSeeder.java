@@ -1,7 +1,6 @@
 package com.feesaas.bootstrap;
 
 import com.feesaas.configuration.infra.PresetRepository;
-import com.feesaas.shared.tenancy.TenantContext;
 import com.feesaas.shared.tenancy.TenantExecutor;
 import com.feesaas.shared.tenancy.TenantScope;
 import com.feesaas.tenant.infra.TenantRepository;
@@ -70,23 +69,27 @@ public class DemoDataSeeder implements ApplicationRunner {
                 .query(UUID.class)
                 .optional()
                 .ifPresent(id -> {
-                    jdbc.sql("""
-                            update tenant_settings
-                               set phone = coalesce(phone, :phone),
-                                   whatsapp_number = coalesce(whatsapp_number, :phone)
-                             where tenant_id = :id
-                            """)
-                            .param("id", id)
-                            .param("phone", OWNER_PHONE)
-                            .update();
-                    jdbc.sql("""
-                            insert into tenant_modules (tenant_id, module_code, enabled)
-                            values (:id, 'ATTENDANCE', true)
-                            on conflict (tenant_id, module_code) do update set enabled = true
-                            """)
-                            .param("id", id)
-                            .update();
-                    tenants.run(TenantScope.tenant(id), this::seedDemoCustomers);
+                    try {
+                        jdbc.sql("""
+                                update tenant_settings
+                                   set phone = coalesce(phone, :phone),
+                                       whatsapp_number = coalesce(whatsapp_number, :phone)
+                                 where tenant_id = :id
+                                """)
+                                .param("id", id)
+                                .param("phone", OWNER_PHONE)
+                                .update();
+                        jdbc.sql("""
+                                insert into tenant_modules (tenant_id, module_code, enabled)
+                                values (:id, 'ATTENDANCE', true)
+                                on conflict (tenant_id, module_code) do update set enabled = true
+                                """)
+                                .param("id", id)
+                                .update();
+                        tenants.run(TenantScope.tenant(id), () -> seedDemoCustomers(id));
+                    } catch (RuntimeException e) {
+                        log.warn("Demo gym extras skipped: {}", e.getMessage());
+                    }
                 });
     }
 
@@ -142,7 +145,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         log.info("Seeded platform admin {} / {}", ADMIN_EMAIL, DEMO_PASSWORD);
     }
 
-    private void seedDemoCustomers() {
+    private void seedDemoCustomers(UUID tenantId) {
         jdbc.sql("update customers set due_date = current_date + 14 where due_date is null and deleted_at is null")
                 .update();
         boolean any = jdbc.sql("select count(*) from customers where deleted_at is null")
@@ -151,7 +154,6 @@ public class DemoDataSeeder implements ApplicationRunner {
         if (any) {
             return;
         }
-        UUID tenantId = TenantContext.requireTenantId();
         insertCustomer(tenantId, "Rahul Sharma", "+919876543210", "rahul@demo.local", java.time.LocalDate.now().plusDays(7), true);
         insertCustomer(tenantId, "Anita Desai", "+919876543211", "anita@demo.local", java.time.LocalDate.now().plusDays(21), false);
         log.info("Seeded demo customers for Demo Gym");
@@ -159,7 +161,16 @@ public class DemoDataSeeder implements ApplicationRunner {
 
     private void insertCustomer(
             UUID tenantId, String name, String phone, String email, java.time.LocalDate dueDate, boolean hasWhatsapp) {
-        long seq = jdbc.sql("select next_counter('customer')").query(Long.class).single();
+        long seq = jdbc.sql("""
+                insert into tenant_counters (tenant_id, counter_key, value)
+                values (:tenantId, 'customer', 1)
+                on conflict (tenant_id, counter_key)
+                do update set value = tenant_counters.value + 1
+                returning value
+                """)
+                .param("tenantId", tenantId)
+                .query(Long.class)
+                .single();
         jdbc.sql("""
                 insert into customers (id, tenant_id, customer_code, full_name, phone, email, due_date, has_whatsapp)
                 values (:id, :tenantId, :code, :name, :phone, :email, :dueDate, :hasWa)
