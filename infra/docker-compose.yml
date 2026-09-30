@@ -16,5 +16,20 @@ services:
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    ports: ["9085:9085"]
+    environment:
+      PORT: "9085"
+      DB_URL: jdbc:postgresql://postgres:5432/feesaas
+      DB_APP_USER: feesaas_app
+      DB_APP_PASSWORD: feesaas_app
+      DB_OWNER_USER: feesaas_owner
+      DB_OWNER_PASSWORD: feesaas_owner
+    depends_on:
+      postgres:
+        condition: service_healthy
 volumes:
   pgdata:
