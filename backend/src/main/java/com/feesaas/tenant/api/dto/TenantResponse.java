@@ -1,0 +1,40 @@
+package com.feesaas.tenant.api.dto;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+public record TenantResponse(
+        UUID id,
+        String name,
+        String slug,
+        String businessType,
+        String status,
+        String timezone,
+        String currency,
+        Instant createdAt,
+        List<String> modules,
+        UUID ownerId,
+        String planCode,
+        int maxMembers,
+        int maxStaff,
+        boolean hasLogo,
+        String logoBase64,
+        String displayName,
+        String accentColor,
+        Instant trialEndsAt,
+        int graceDays,
+        String billingStatus,
+        Integer customMaxMembers,
+        Integer customMaxStaff,
+        String phone,
+        String whatsappNumber,
+        long memberCount,
+        long staffCount,
+        Instant lastLoginAt,
+        LocalDate lastCollectionOn,
+        String ownerFullName,
+        String ownerEmail,
+        String ownerPhone
+) {}

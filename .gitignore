@@ -1,0 +1,14 @@
+target/
+.gradle/
+build/
+.idea/
+*.iml
+.env
+.DS_Store
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+**/Generated.xcworkspace/
+**/Pods/

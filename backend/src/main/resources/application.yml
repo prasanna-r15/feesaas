@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: feesaas
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/feesaas}
+    username: ${DB_APP_USER:postgres}
+    password: ${DB_APP_PASSWORD:welcome123}
+  flyway:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/feesaas}
+    user: ${DB_OWNER_USER:postgres}
+    password: ${DB_OWNER_PASSWORD:welcome123}
+    locations: classpath:db/migration
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  jackson:
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: false
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+server:
+  port: ${SERVER_PORT:9085}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+feesaas:
+  seed-demo: true
+  auth:
+    issuer: feesaas
+    access-ttl: 15m
+    refresh-ttl: 30d
+    reset-ttl: 1h
+    lockout: 15m
+    max-failed-logins: 5
+    expose-reset-token: false
+    otp-ttl: 10m
+    expose-otp: false

@@ -1,0 +1,7 @@
+{
+    "java.compile.nullAnalysis.mode": "automatic",
+    "dart.flutterSdkPath": "D:\\projects\\flutter_windows_3.47.5-stable\\flutter",
+    "terminal.integrated.env.windows": {
+        "PATH": "D:\\projects\\flutter_windows_3.47.5-stable\\flutter\\bin;${env:PATH}"
+    }
+}
