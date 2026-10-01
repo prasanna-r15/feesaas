@@ -80,7 +80,7 @@ class FsTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
+          minimumSize: const Size(64, 52),
           textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),

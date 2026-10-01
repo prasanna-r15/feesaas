@@ -8,6 +8,8 @@ Future<void> showAddExpenseSheet(BuildContext context, WidgetRef ref, {PersonalE
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
+    useSafeArea: true,
+    useRootNavigator: true,
     builder: (ctx) => _AddExpenseSheet(existing: existing),
   );
 }

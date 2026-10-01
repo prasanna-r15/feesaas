@@ -577,6 +577,8 @@ Future<LocationChoice?> showLocationPicker({
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
+    useRootNavigator: true,
+    useSafeArea: true,
     builder: (ctx) {
       var query = '';
       return StatefulBuilder(

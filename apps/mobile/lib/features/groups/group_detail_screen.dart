@@ -327,6 +327,8 @@ class GroupDetailScreen extends ConsumerWidget {
     if (!context.mounted) return;
     await showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -416,6 +418,8 @@ class GroupDetailScreen extends ConsumerWidget {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
+      useSafeArea: true,
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: MediaQuery.viewInsetsOf(ctx).bottom + 24),
         child: StatefulBuilder(

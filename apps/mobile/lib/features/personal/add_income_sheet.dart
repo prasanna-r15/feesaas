@@ -8,6 +8,8 @@ Future<void> showIncomeSheet(BuildContext context, WidgetRef ref, {PersonalIncom
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
+    useSafeArea: true,
+    useRootNavigator: true,
     builder: (ctx) => _IncomeSheet(existing: existing),
   );
 }

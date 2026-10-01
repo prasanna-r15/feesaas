@@ -198,6 +198,7 @@ public class AuthService {
         return tenants.call(scopeForUser(user, ctx), () -> issueNewFamily(user, deviceId, ctx));
     }
 
+    @Transactional
     public TokenPair switchContext(String kind, UUID tenantId, UUID workspaceId, UUID groupId, String deviceId) {
         AuthUser user = users.findById(currentUserId()).orElseThrow(AuthService::unauthenticated);
         AccessContext ctx = switch (kind == null ? "" : kind.toUpperCase()) {

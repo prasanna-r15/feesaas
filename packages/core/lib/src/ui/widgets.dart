@@ -102,6 +102,7 @@ Future<T?> showFsSheet<T>({
     isScrollControlled: true,
     showDragHandle: true,
     useSafeArea: true,
+    useRootNavigator: true,
     builder: (ctx) {
       final media = MediaQuery.of(ctx);
       return Padding(
@@ -144,10 +145,11 @@ class FsSheetForm extends StatelessWidget {
           body,
           if (actions.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: actions,
-            ),
+            for (final action in actions)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: action,
+              ),
           ],
         ],
       ),
