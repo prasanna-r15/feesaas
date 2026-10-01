@@ -6,8 +6,15 @@ class ReportApi {
 
   final Dio _dio;
 
-  Future<ReportOverview> overview() async {
-    final response = await _dio.get<Map<String, dynamic>>('/api/v1/reports/overview');
+  Future<ReportOverview> overview({int? year, int? month, String? paidOn}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/reports/overview',
+      queryParameters: {
+        if (year != null) 'year': year,
+        if (month != null) 'month': month,
+        if (paidOn != null && paidOn.isNotEmpty) 'paidOn': paidOn,
+      },
+    );
     return ReportOverview.fromJson(response.data!);
   }
 

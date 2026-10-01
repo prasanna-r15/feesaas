@@ -94,6 +94,7 @@ public class FeeRepository {
                   join fee_plans p on p.id = cfp.fee_plan_id
                   left join tenant_branches b on b.id = c.branch_id and b.tenant_id = c.tenant_id and b.deleted_at is null
                  where f.deleted_at is null
+                   and f.tenant_id = app_tenant_id()
                    and c.deleted_at is null
                    and f.status in ('PENDING','PARTIALLY_PAID')
                    and (:branchId::uuid is null or c.branch_id = :branchId)
@@ -123,7 +124,7 @@ public class FeeRepository {
                   join customers c on c.id = f.customer_id and c.tenant_id = f.tenant_id
                   join customer_fee_plans cfp on cfp.id = f.customer_fee_plan_id
                   join fee_plans p on p.id = cfp.fee_plan_id
-                 where f.id = :id and f.deleted_at is null and c.deleted_at is null
+                 where f.id = :id and f.deleted_at is null and c.deleted_at is null and f.tenant_id = app_tenant_id()
                 """)
                 .param("id", id)
                 .query((rs, i) -> new RemindRow(
@@ -190,6 +191,7 @@ public class FeeRepository {
                       from fees f
                       join customers c on c.id = f.customer_id and c.tenant_id = f.tenant_id
                      where f.deleted_at is null
+                       and f.tenant_id = app_tenant_id()
                        and c.deleted_at is null
                        and f.status in ('PENDING','PARTIALLY_PAID')
                   ) x

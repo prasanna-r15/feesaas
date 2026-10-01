@@ -8,5 +8,6 @@ void main() {
     await tester.pump();
     expect(find.text('Sign in to see who owes you money.'), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);
+    expect(find.text('Forgot password?'), findsOneWidget);
   });
 }

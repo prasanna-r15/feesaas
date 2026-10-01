@@ -1,3 +1,5 @@
 package com.feesaas.auth.api.dto;
 
-public record ForgotPasswordResponse(boolean accepted, String resetToken) {}
+import java.util.UUID;
+
+public record ForgotPasswordResponse(boolean accepted, UUID challengeId, String resetToken) {}

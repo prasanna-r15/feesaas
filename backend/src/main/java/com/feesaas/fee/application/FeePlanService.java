@@ -5,6 +5,8 @@ import com.feesaas.fee.infra.FeePlanRepository.PlanRow;
 import com.feesaas.shared.error.ApiException;
 import com.feesaas.shared.error.ErrorCode;
 import com.feesaas.shared.tenancy.TenantContext;
+import com.feesaas.shared.tenancy.TenantExecutor;
+import com.feesaas.shared.tenancy.TenantScope;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -20,17 +22,18 @@ public class FeePlanService {
 
     private final FeePlanRepository plans;
     private final JdbcClient jdbc;
+    private final TenantExecutor executor;
 
-    public FeePlanService(FeePlanRepository plans, JdbcClient jdbc) {
+    public FeePlanService(FeePlanRepository plans, JdbcClient jdbc, TenantExecutor executor) {
         this.plans = plans;
         this.jdbc = jdbc;
+        this.executor = executor;
     }
 
     @PreAuthorize("hasPermission(null, 'fees.view')")
     @Transactional(readOnly = true)
     public List<FeePlanView> list() {
-        TenantContext.requireTenantId();
-        return plans.list().stream().map(this::toView).toList();
+        return listCurrent();
     }
 
     @PreAuthorize("hasPermission(null, 'fees.view')")
@@ -43,6 +46,56 @@ public class FeePlanService {
     @PreAuthorize("hasPermission(null, 'fees.manage')")
     @Transactional
     public FeePlanView create(UpsertPlanCommand cmd) {
+        return createCurrent(cmd);
+    }
+
+    @PreAuthorize("hasPermission(null, 'fees.manage')")
+    @Transactional
+    public FeePlanView patch(UUID id, UpsertPlanCommand cmd) {
+        return patchCurrent(id, cmd);
+    }
+
+    @PreAuthorize("hasPermission(null, 'fees.manage')")
+    @Transactional
+    public void delete(UUID id) {
+        deleteCurrent(id);
+    }
+
+    @PreAuthorize("hasPermission(null, 'platform.tenants.manage')")
+    public List<FeePlanView> platformList(UUID tenantId) {
+        return executor.call(TenantScope.tenant(tenantId), this::listCurrent);
+    }
+
+    @PreAuthorize("hasPermission(null, 'platform.tenants.manage')")
+    public List<FeePlanView> platformCreate(UUID tenantId, UpsertPlanCommand cmd) {
+        return executor.call(TenantScope.tenant(tenantId), () -> {
+            createCurrent(cmd);
+            return listCurrent();
+        });
+    }
+
+    @PreAuthorize("hasPermission(null, 'platform.tenants.manage')")
+    public List<FeePlanView> platformPatch(UUID tenantId, UUID id, UpsertPlanCommand cmd) {
+        return executor.call(TenantScope.tenant(tenantId), () -> {
+            patchCurrent(id, cmd);
+            return listCurrent();
+        });
+    }
+
+    @PreAuthorize("hasPermission(null, 'platform.tenants.manage')")
+    public List<FeePlanView> platformDelete(UUID tenantId, UUID id) {
+        return executor.call(TenantScope.tenant(tenantId), () -> {
+            deleteCurrent(id);
+            return listCurrent();
+        });
+    }
+
+    private List<FeePlanView> listCurrent() {
+        TenantContext.requireTenantId();
+        return plans.list().stream().map(this::toView).toList();
+    }
+
+    private FeePlanView createCurrent(UpsertPlanCommand cmd) {
         UUID tenantId = TenantContext.requireTenantId();
         String name = requireName(cmd.name());
         long amount = requireAmount(cmd.amountMinor());
@@ -56,9 +109,7 @@ public class FeePlanService {
         return toView(require(id));
     }
 
-    @PreAuthorize("hasPermission(null, 'fees.manage')")
-    @Transactional
-    public FeePlanView patch(UUID id, UpsertPlanCommand cmd) {
+    private FeePlanView patchCurrent(UUID id, UpsertPlanCommand cmd) {
         TenantContext.requireTenantId();
         require(id);
         String name = cmd.name() == null ? null : requireName(cmd.name());
@@ -74,9 +125,7 @@ public class FeePlanService {
         return toView(require(id));
     }
 
-    @PreAuthorize("hasPermission(null, 'fees.manage')")
-    @Transactional
-    public void delete(UUID id) {
+    private void deleteCurrent(UUID id) {
         TenantContext.requireTenantId();
         require(id);
         if (plans.activeEnrollmentCount(id) > 0) {
@@ -85,7 +134,7 @@ public class FeePlanService {
         if (plans.softDelete(id) == 0) {
             throw new ApiException(ErrorCode.NOT_FOUND, "Fee plan not found.");
         }
-        plans.ensureDefault(TenantContext.requireTenantId(), tenantCurrency(TenantContext.requireTenantId()));
+        plans.promoteDefaultIfMissing();
     }
 
     private PlanRow require(UUID id) {

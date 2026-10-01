@@ -64,13 +64,15 @@ public class TenantContextFilter extends OncePerRequestFilter {
             return TenantScope.group(userId, groupId);
         }
         String rawTenant = jwt.getToken().getClaimAsString(TenantClaims.TENANT_ID);
+        if (platform) {
+            return TenantScope.platformAdmin().withUser(userId);
+        }
         if (rawTenant == null || rawTenant.isBlank()) {
-            return platform ? TenantScope.platformAdmin().withUser(userId) : TenantScope.NONE;
+            return TenantScope.NONE;
         }
         try {
             UUID tenantId = UUID.fromString(rawTenant);
-            TenantScope scope = platform ? TenantScope.platformFor(tenantId) : TenantScope.tenant(tenantId);
-            return scope.withUser(userId);
+            return TenantScope.tenant(tenantId).withUser(userId);
         } catch (IllegalArgumentException e) {
             log.warn("Rejected malformed tenant_id claim");
             return TenantScope.NONE;

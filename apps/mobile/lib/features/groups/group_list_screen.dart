@@ -79,11 +79,11 @@ class GroupListScreen extends ConsumerWidget {
 
   Future<void> _join(BuildContext context) async {
     final code = TextEditingController();
-    await showDialog<void>(
+    await showFsSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Join with invite code'),
-        content: TextField(
+      builder: (ctx) => FsSheetForm(
+        title: 'Join with invite code',
+        body: TextField(
           controller: code,
           decoration: const InputDecoration(labelText: 'Invite code'),
           autofocus: true,
@@ -107,11 +107,11 @@ class GroupListScreen extends ConsumerWidget {
   Future<void> _create(BuildContext context, WidgetRef ref) async {
     final name = TextEditingController();
     String type = 'TRIP';
-    await showDialog<void>(
+    await showFsSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New group'),
-        content: Column(
+      builder: (ctx) => FsSheetForm(
+        title: 'New group',
+        body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),

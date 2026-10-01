@@ -9,6 +9,6 @@ public record CreateStaffRequest(
         @NotBlank @Size(max = 120) String fullName,
         @Email String email,
         @Size(max = 32) String phone,
-        @NotBlank @Size(min = 8, max = 128) String password,
+        @Size(min = 8, max = 128) String password,
         List<String> permissions
 ) {}

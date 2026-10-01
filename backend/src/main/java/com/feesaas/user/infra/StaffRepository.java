@@ -44,7 +44,46 @@ public class StaffRepository implements OwnerProvisioner {
                 .param("role", roleCode)
                 .param("status", status)
                 .update();
+        jdbc.sql("select auth_ensure_personal_workspace(:id)")
+                .param("id", id)
+                .query(UUID.class)
+                .optional();
+        jdbc.sql("select seed_personal_categories(auth_workspace_of(:id))")
+                .param("id", id)
+                .query(Integer.class)
+                .optional();
+        if (tenantId != null) {
+            jdbc.sql("select auth_attach_business_membership(:id, :tenantId, :role)")
+                    .param("id", id)
+                    .param("tenantId", tenantId)
+                    .param("role", roleCode)
+                    .query(Integer.class)
+                    .optional();
+        }
         return id;
+    }
+
+    public int convertIndividualToStaff(UUID userId, UUID tenantId, String fullName) {
+        return convertIndividualToRole(userId, tenantId, fullName, "STAFF");
+    }
+
+    public int convertIndividualToRole(UUID userId, UUID tenantId, String fullName, String roleCode) {
+        String role = "BUSINESS_OWNER".equals(roleCode) ? "BUSINESS_OWNER" : "STAFF";
+        return jdbc.sql("""
+                update users
+                   set tenant_id = :tenantId,
+                       role_code = :role,
+                       full_name = coalesce(:name, full_name),
+                       updated_at = now()
+                 where id = :id
+                   and role_code = 'INDIVIDUAL'
+                   and tenant_id is null
+                """)
+                .param("tenantId", tenantId)
+                .param("role", role)
+                .param("name", fullName)
+                .param("id", userId)
+                .update();
     }
 
     public long countStaff() {

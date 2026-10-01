@@ -44,11 +44,12 @@ public class BootstrapService {
         this.json = json;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Bootstrap load() {
         UUID userId = CurrentUser.id();
         AuthUser user = users.findById(userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED, "Invalid credentials."));
+        identity.provisionHats(userId, user.tenantId(), user.tenantId() == null ? null : user.roleCode());
         List<String> permissions = new ArrayList<>(permissionLookup.forUser(userId));
         permissions.sort(String::compareTo);
         TenantSnapshot tenant = null;
@@ -77,7 +78,9 @@ public class BootstrapService {
                     tenant == null ? "Business" : tenant.displayName()));
         }
         UserContext active = activeFromScope(contexts, tenant);
-        boolean needsOnboarding = identity.profile(userId).map(p -> !p.onboardingDone()).orElse(false);
+        boolean needsOnboarding = identity.profile(userId)
+                .map(p -> !p.onboardingDone())
+                .orElse("INDIVIDUAL".equals(user.roleCode()));
         return new Bootstrap(
                 new UserSnapshot(user.id(), user.fullName(), user.roleCode(), user.tenantId()),
                 permissions,

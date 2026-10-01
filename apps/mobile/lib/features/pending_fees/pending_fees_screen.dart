@@ -1,4 +1,5 @@
 import 'package:feesaas_core/feesaas_core.dart';
+import 'package:feesaas_mobile/features/auth/workspace_switcher.dart';
 import 'package:feesaas_mobile/features/catalog/catalog_screens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,6 +32,7 @@ class PendingFeesScreen extends ConsumerWidget {
       appBar: AppBar(
         leading: const Padding(padding: EdgeInsets.all(6), child: DueMateLogo(height: 36)),
         title: const Text('Pending fees'),
+        actions: const [WorkspaceSwitcher()],
       ),
       body: Column(
         children: [

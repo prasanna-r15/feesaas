@@ -1,5 +1,7 @@
 package com.feesaas.report.infra;
 
+import java.sql.Date;
+import java.sql.Types;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -14,33 +16,53 @@ public class ReportRepository {
         this.jdbc = jdbc;
     }
 
-    public OverviewRow overview() {
+    public List<PeriodRow> collectionPeriods() {
+        return jdbc.sql("""
+                select extract(year from d)::int as y, extract(month from d)::int as m
+                  from (
+                    select paid_on as d from payments where status = 'RECORDED' and tenant_id = app_tenant_id()
+                    union
+                    select sold_on from addon_sales where tenant_id = app_tenant_id()
+                  ) x
+                 group by 1, 2
+                 order by y desc, m desc
+                """)
+                .query((rs, i) -> new PeriodRow(rs.getInt("y"), rs.getInt("m")))
+                .list();
+    }
+
+    public OverviewRow overview(LocalDate day, LocalDate monthStart, LocalDate monthEnd) {
         return jdbc.sql("""
                 select
                   (select count(*) from customers
-                    where deleted_at is null and status = 'ACTIVE') as members,
+                    where deleted_at is null and status = 'ACTIVE' and tenant_id = app_tenant_id()) as members,
                   (select count(*) from fees
-                    where deleted_at is null and status in ('PENDING','PARTIALLY_PAID')) as pending_count,
+                    where deleted_at is null and status in ('PENDING','PARTIALLY_PAID') and tenant_id = app_tenant_id()) as pending_count,
                   (select coalesce(sum(gross_minor + adjustments_minor - paid_minor), 0) from fees
-                    where deleted_at is null and status in ('PENDING','PARTIALLY_PAID')) as outstanding_minor,
+                    where deleted_at is null and status in ('PENDING','PARTIALLY_PAID') and tenant_id = app_tenant_id()) as outstanding_minor,
                   (select count(*) from fees
                     where deleted_at is null and status in ('PENDING','PARTIALLY_PAID')
-                      and due_date + grace_days < current_date) as overdue_count,
+                      and due_date + grace_days < current_date and tenant_id = app_tenant_id()) as overdue_count,
                   (select coalesce(sum(gross_minor + adjustments_minor - paid_minor), 0) from fees
                     where deleted_at is null and status in ('PENDING','PARTIALLY_PAID')
-                      and due_date + grace_days < current_date) as overdue_minor,
+                      and due_date + grace_days < current_date and tenant_id = app_tenant_id()) as overdue_minor,
                   (select coalesce(sum(amount_minor), 0) from payments
-                    where status = 'RECORDED' and paid_on = current_date) as fees_today_minor,
+                    where status = 'RECORDED' and paid_on = :day and tenant_id = app_tenant_id()) as fees_today_minor,
                   (select coalesce(sum(amount_minor), 0) from payments
                     where status = 'RECORDED'
-                      and paid_on >= date_trunc('month', current_date)::date
-                      and paid_on < (date_trunc('month', current_date) + interval '1 month')::date) as fees_month_minor,
+                      and paid_on >= :monthStart
+                      and paid_on < :monthEnd
+                      and tenant_id = app_tenant_id()) as fees_month_minor,
                   (select coalesce(sum(amount_minor), 0) from addon_sales
-                    where sold_on = current_date) as extras_today_minor,
+                    where sold_on = :day and tenant_id = app_tenant_id()) as extras_today_minor,
                   (select coalesce(sum(amount_minor), 0) from addon_sales
-                    where sold_on >= date_trunc('month', current_date)::date
-                      and sold_on < (date_trunc('month', current_date) + interval '1 month')::date) as extras_month_minor
+                    where sold_on >= :monthStart
+                      and sold_on < :monthEnd
+                      and tenant_id = app_tenant_id()) as extras_month_minor
                 """)
+                .param("day", Date.valueOf(day))
+                .param("monthStart", Date.valueOf(monthStart))
+                .param("monthEnd", Date.valueOf(monthEnd))
                 .query((rs, i) -> new OverviewRow(
                         rs.getLong("members"),
                         rs.getLong("pending_count"),
@@ -63,6 +85,7 @@ public class ReportRepository {
                   join customer_fee_plans cfp on cfp.id = f.customer_fee_plan_id
                   join fee_plans p on p.id = cfp.fee_plan_id
                  where f.deleted_at is null
+                   and f.tenant_id = app_tenant_id()
                    and f.status in ('PENDING','PARTIALLY_PAID')
                  group by p.name
                  order by outstanding_minor desc, p.name
@@ -74,7 +97,7 @@ public class ReportRepository {
                 .list();
     }
 
-    public List<PaymentRow> recentPayments() {
+    public List<PaymentRow> recentPayments(LocalDate paidOn, LocalDate from, LocalDate to) {
         return jdbc.sql("""
                 select * from (
                   select p.receipt_no as receipt_no,
@@ -95,6 +118,10 @@ public class ReportRepository {
                     left join customer_fee_plans cfp on cfp.id = f.customer_fee_plan_id
                     left join fee_plans fp on fp.id = cfp.fee_plan_id
                    where p.status = 'RECORDED'
+                     and p.tenant_id = app_tenant_id()
+                     and (:paidOn::date is null or p.paid_on = :paidOn)
+                     and (:from::date is null or p.paid_on >= :from)
+                     and (:to::date is null or p.paid_on < :to)
                   union all
                   select coalesce('EXTRA-' || substr(s.id::text, 1, 8), 'EXTRA') as receipt_no,
                          c.full_name,
@@ -110,10 +137,17 @@ public class ReportRepository {
                     join customers c on c.id = s.customer_id
                     join addon_products pr on pr.id = s.product_id and pr.tenant_id = s.tenant_id
                     left join tenant_branches b on b.id = c.branch_id and b.tenant_id = c.tenant_id and b.deleted_at is null
+                   where s.tenant_id = app_tenant_id()
+                     and (:paidOn::date is null or s.sold_on = :paidOn)
+                     and (:from::date is null or s.sold_on >= :from)
+                     and (:to::date is null or s.sold_on < :to)
                 ) u
                  order by u.paid_on desc, u.sort_at desc
                  limit 200
                 """)
+                .param("paidOn", paidOn == null ? null : Date.valueOf(paidOn), Types.DATE)
+                .param("from", from == null ? null : Date.valueOf(from), Types.DATE)
+                .param("to", to == null ? null : Date.valueOf(to), Types.DATE)
                 .query((rs, i) -> new PaymentRow(
                         rs.getString("receipt_no"),
                         rs.getString("full_name"),
@@ -145,6 +179,7 @@ public class ReportRepository {
                     from payments p
                     join customers c on c.id = p.customer_id
                     left join tenant_branches b on b.id = c.branch_id and b.tenant_id = c.tenant_id and b.deleted_at is null
+                   where p.tenant_id = app_tenant_id()
                   union all
                   select 'EXTRA' as source,
                          coalesce('EXTRA-' || substr(s.id::text, 1, 8), 'EXTRA') as receipt_no,
@@ -162,6 +197,7 @@ public class ReportRepository {
                     join customers c on c.id = s.customer_id
                     join addon_products pr on pr.id = s.product_id and pr.tenant_id = s.tenant_id
                     left join tenant_branches b on b.id = c.branch_id and b.tenant_id = c.tenant_id and b.deleted_at is null
+                   where s.tenant_id = app_tenant_id()
                 ) u
                  order by u.paid_on desc, u.sort_at desc
                 """)
@@ -179,6 +215,8 @@ public class ReportRepository {
                         rs.getString("status")))
                 .list();
     }
+
+    public record PeriodRow(int year, int month) {}
 
     public record OverviewRow(
             long members,

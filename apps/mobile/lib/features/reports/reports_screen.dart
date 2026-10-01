@@ -3,9 +3,14 @@ import 'package:feesaas_mobile/util/files.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+typedef ReportQuery = ({int? year, int? month, String? paidOn});
+
+final reportQueryProvider = StateProvider<ReportQuery>((ref) => (year: null, month: null, paidOn: null));
+
 final reportOverviewProvider = FutureProvider.autoDispose<ReportOverview>((ref) {
   ref.watch(workspaceClockProvider);
-  return ref.watch(reportApiProvider).overview();
+  final q = ref.watch(reportQueryProvider);
+  return ref.watch(reportApiProvider).overview(year: q.year, month: q.month, paidOn: q.paidOn);
 });
 
 class ReportsScreen extends ConsumerWidget {
@@ -14,6 +19,7 @@ class ReportsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(reportOverviewProvider);
+    final query = ref.watch(reportQueryProvider);
     return Scaffold(
       appBar: AppBar(
         leading: const Padding(padding: EdgeInsets.all(6), child: DueMateLogo(height: 36)),
@@ -37,12 +43,20 @@ class ReportsScreen extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
             children: [
+              _ReportFilters(report: report, query: query),
+              const SizedBox(height: 14),
               FsEnter(
                 child: _HeroCard(
-                  title: 'Collected this month',
-                  value: report.collectedMonthLabel,
-                  caption:
-                      'Fees ${report.feesMonthLabel} · Extras ${report.extrasMonthLabel}\nToday ${report.collectedTodayLabel} (fees ${report.feesTodayLabel} · extras ${report.extrasTodayLabel})',
+                  title: query.paidOn != null
+                      ? 'Collected on ${query.paidOn}'
+                      : query.year != null && query.month != null
+                          ? 'Collected in ${ReportPeriod(year: query.year!, month: query.month!).label}'
+                          : 'Collected this month',
+                  value: query.paidOn != null ? report.collectedTodayLabel : report.collectedMonthLabel,
+                  caption: query.paidOn != null
+                      ? 'Fees ${report.feesTodayLabel} · Extras ${report.extrasTodayLabel}'
+                      : 'Fees ${report.feesMonthLabel} · Extras ${report.extrasMonthLabel}\n'
+                          '${query.year == null ? 'Today ${report.collectedTodayLabel} (fees ${report.feesTodayLabel} · extras ${report.extrasTodayLabel})' : 'Open dues are current, not this month’s snapshot.'}',
                 ),
               ),
               const SizedBox(height: 14),
@@ -150,7 +164,10 @@ class ReportsScreen extends ConsumerWidget {
               const SizedBox(height: 24),
               FsEnter(
                 delay: const Duration(milliseconds: 240),
-                child: Text('All collections', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                child: Text(
+                  query.paidOn != null ? 'Paid on ${query.paidOn}' : 'All collections',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -178,6 +195,84 @@ Future<void> _export(BuildContext context, WidgetRef ref, String format) async {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     }
+  }
+}
+
+class _ReportFilters extends ConsumerWidget {
+  const _ReportFilters({required this.report, required this.query});
+
+  final ReportOverview report;
+  final ReportQuery query;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FsCard(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Filters', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text(
+              'Month and year lists only periods that already have collections for this gym.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                DropdownMenu<String>(
+                  initialSelection: query.year == null || query.month == null ? '' : '${query.year}-${query.month}',
+                  label: const Text('Month / year'),
+                  dropdownMenuEntries: [
+                    const DropdownMenuEntry(value: '', label: 'This month'),
+                    for (final p in report.periods) DropdownMenuEntry(value: '${p.year}-${p.month}', label: p.label),
+                  ],
+                  onSelected: (v) {
+                    if (v == null || v.isEmpty) {
+                      ref.read(reportQueryProvider.notifier).state = (year: null, month: null, paidOn: query.paidOn);
+                      return;
+                    }
+                    final parts = v.split('-');
+                    ref.read(reportQueryProvider.notifier).state = (
+                      year: int.parse(parts[0]),
+                      month: int.parse(parts[1]),
+                      paidOn: null,
+                    );
+                  },
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.tryParse(query.paidOn ?? '') ?? DateTime.now(),
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                    );
+                    if (picked == null) {
+                      return;
+                    }
+                    final iso =
+                        '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                    ref.read(reportQueryProvider.notifier).state = (year: null, month: null, paidOn: iso);
+                  },
+                  icon: const Icon(Icons.event_outlined),
+                  label: Text(query.paidOn == null ? 'Who paid on a date' : 'Paid ${query.paidOn}'),
+                ),
+                if (query.year != null || query.month != null || query.paidOn != null)
+                  TextButton(
+                    onPressed: () => ref.read(reportQueryProvider.notifier).state = (year: null, month: null, paidOn: null),
+                    child: const Text('Clear'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

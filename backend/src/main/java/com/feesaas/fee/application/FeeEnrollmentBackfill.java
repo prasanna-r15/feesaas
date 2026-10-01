@@ -31,14 +31,18 @@ public class FeeEnrollmentBackfill implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        executor.run(TenantScope.platformAdmin(), () -> {
-            for (var tenant : tenants.list()) {
-                if (!"ACTIVE".equals(tenant.status()) && !"ONBOARDING".equals(tenant.status())) {
-                    continue;
-                }
-                executor.run(TenantScope.tenant(tenant.id()), enrollment::backfillCurrentTenant);
+        var gyms = executor.call(TenantScope.platformAdmin(), tenants::list);
+        for (var tenant : gyms) {
+            if (!"ACTIVE".equals(tenant.status()) && !"ONBOARDING".equals(tenant.status())) {
+                continue;
             }
-            log.info("Fee enrollment backfill complete");
-        });
+            try {
+                executor.run(TenantScope.tenant(tenant.id()), enrollment::backfillCurrentTenant);
+            } catch (Exception e) {
+                log.warn("Fee enrollment backfill skipped for tenant {} ({}): {}",
+                        tenant.id(), tenant.name(), e.getMessage());
+            }
+        }
+        log.info("Fee enrollment backfill complete");
     }
 }

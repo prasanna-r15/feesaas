@@ -1,4 +1,5 @@
 import 'package:feesaas_core/feesaas_core.dart';
+import 'package:feesaas_mobile/features/auth/workspace_switcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,7 @@ class MoreScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(tenantConfigProvider);
     final scheme = Theme.of(context).colorScheme;
+    final hat = _otherHat(config);
     return Scaffold(
       appBar: AppBar(
         leading: const Padding(padding: EdgeInsets.all(6), child: DueMateLogo(height: 36)),
@@ -35,6 +37,16 @@ class MoreScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
+          if (hat != null)
+            _MoreTile(
+              delay: Duration.zero,
+              icon: hat.kind == 'PERSONAL' ? Icons.savings_outlined : Icons.storefront_outlined,
+              title: hat.kind == 'PERSONAL' ? 'My money' : hat.label,
+              subtitle: hat.kind == 'PERSONAL'
+                  ? 'Expenses, income, budgets, and group split'
+                  : 'Members, fees, and attendance',
+              onTap: () => swapWorkspace(context, ref, hat),
+            ),
           PermissionGate(
             permission: 'settings.manage',
             child: _MoreTile(
@@ -155,19 +167,15 @@ class MoreScreen extends ConsumerWidget {
               onTap: () => context.go('/more/staff'),
             ),
           ),
+          _MoreTile(
+            delay: const Duration(milliseconds: 220),
+            icon: Icons.chat_outlined,
+            title: 'Chat with admin',
+            subtitle: 'Message DueMate support',
+            unread: ref.watch(mySupportUnreadProvider),
+            onTap: () => context.push('/more/support'),
+          ),
           const SizedBox(height: 8),
-          if ((config?.bootstrap.contexts.length ?? 0) > 1)
-            for (final c in config!.bootstrap.contexts)
-              _MoreTile(
-                delay: Duration.zero,
-                icon: Icons.swap_horiz,
-                title: c.label,
-                subtitle: 'Switch to ${c.kind.toLowerCase()}',
-                onTap: () async {
-                  await ref.read(sessionControllerProvider.notifier).switchContext(c);
-                  if (context.mounted) context.go(ref.read(tenantConfigProvider)?.homeLocation ?? '/pending');
-                },
-              ),
           FsEnter(
             delay: const Duration(milliseconds: 240),
             child: FsCard(
@@ -184,6 +192,8 @@ class MoreScreen extends ConsumerWidget {
   }
 }
 
+UserContext? _otherHat(TenantConfig? config) => otherWorkspace(config);
+
 class _MoreTile extends StatelessWidget {
   const _MoreTile({
     required this.icon,
@@ -191,6 +201,7 @@ class _MoreTile extends StatelessWidget {
     required this.onTap,
     this.subtitle,
     this.delay = Duration.zero,
+    this.unread = 0,
   });
 
   final IconData icon;
@@ -198,6 +209,7 @@ class _MoreTile extends StatelessWidget {
   final String? subtitle;
   final VoidCallback onTap;
   final Duration delay;
+  final int unread;
 
   @override
   Widget build(BuildContext context) {
@@ -208,7 +220,7 @@ class _MoreTile extends StatelessWidget {
         child: FsCard(
           onTap: onTap,
           child: ListTile(
-            leading: Icon(icon),
+            leading: FsUnreadBadge(count: unread, child: Icon(icon)),
             title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
             subtitle: subtitle == null ? null : Text(subtitle!),
             trailing: const Icon(Icons.chevron_right),

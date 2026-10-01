@@ -23,16 +23,18 @@ public class PasswordResetRepository {
                 .update();
     }
 
-    public void insert(UUID userId, String tokenHash, Instant expiresAt) {
+    public UUID insert(UUID userId, String tokenHash, Instant expiresAt) {
+        UUID id = UuidCreator.getTimeOrderedEpoch();
         jdbc.sql("""
                 insert into password_reset_tokens (id, user_id, token_hash, expires_at)
                 values (:id, :userId, :hash, :expiresAt)
                 """)
-                .param("id", UuidCreator.getTimeOrderedEpoch())
+                .param("id", id)
                 .param("userId", userId)
                 .param("hash", tokenHash)
                 .param("expiresAt", JdbcTimes.ts(expiresAt))
                 .update();
+        return id;
     }
 
     public Optional<ResetToken> findActive(String tokenHash) {
@@ -43,6 +45,24 @@ public class PasswordResetRepository {
                    and used_at is null
                    and expires_at > now()
                 """)
+                .param("hash", tokenHash)
+                .query((rs, i) -> new ResetToken(rs.getObject("id", UUID.class), rs.getObject("user_id", UUID.class)))
+                .optional();
+    }
+
+    public Optional<ResetToken> findActive(UUID id, String tokenHash) {
+        if (id == null) {
+            return findActive(tokenHash);
+        }
+        return jdbc.sql("""
+                select id, user_id
+                  from password_reset_tokens
+                 where id = :id
+                   and token_hash = :hash
+                   and used_at is null
+                   and expires_at > now()
+                """)
+                .param("id", id)
                 .param("hash", tokenHash)
                 .query((rs, i) -> new ResetToken(rs.getObject("id", UUID.class), rs.getObject("user_id", UUID.class)))
                 .optional();

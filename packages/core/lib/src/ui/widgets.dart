@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:feesaas_core/src/config/tenant_config.dart';
+import 'package:feesaas_core/src/ui/hat_loader.dart';
 import 'package:feesaas_core/src/ui/motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -80,11 +81,78 @@ class FsErrorState extends StatelessWidget {
   }
 }
 
-class FsLoading extends StatelessWidget {
-  const FsLoading({super.key});
+class FsLoading extends ConsumerWidget {
+  const FsLoading({super.key, this.personal});
+
+  final bool? personal;
 
   @override
-  Widget build(BuildContext context) => const Center(child: CircularProgressIndicator());
+  Widget build(BuildContext context, WidgetRef ref) {
+    final piggy = personal ?? ref.watch(tenantConfigProvider)?.isPersonal ?? true;
+    return Center(child: HatOrbitLoader(personal: piggy));
+  }
+}
+
+Future<T?> showFsSheet<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (ctx) {
+      final media = MediaQuery.of(ctx);
+      return Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 4,
+          bottom: media.viewInsets.bottom + 16,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: media.size.height * 0.86),
+          child: builder(ctx),
+        ),
+      );
+    },
+  );
+}
+
+class FsSheetForm extends StatelessWidget {
+  const FsSheetForm({
+    super.key,
+    required this.title,
+    this.actions = const [],
+    required this.body,
+  });
+
+  final String title;
+  final Widget body;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          body,
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: actions,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class DueMateLogo extends ConsumerWidget {
@@ -228,8 +296,8 @@ class FsAuthScaffold extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          CircularProgressIndicator(color: scheme.primary),
-                          const SizedBox(height: 16),
+                          HatOrbitLoader(personal: true, size: 120),
+                          const SizedBox(height: 8),
                           Text(
                             busyLabel,
                             style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
@@ -243,6 +311,27 @@ class FsAuthScaffold extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class FsUnreadBadge extends StatelessWidget {
+  const FsUnreadBadge({super.key, required this.count, required this.child});
+
+  final int count;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (count <= 0) {
+      return child;
+    }
+    return Badge(
+      isLabelVisible: true,
+      backgroundColor: Theme.of(context).colorScheme.error,
+      textColor: Theme.of(context).colorScheme.onError,
+      label: Text(count > 99 ? '99+' : '$count'),
+      child: child,
     );
   }
 }

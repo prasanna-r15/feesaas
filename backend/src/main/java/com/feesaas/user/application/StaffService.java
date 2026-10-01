@@ -1,5 +1,8 @@
 package com.feesaas.user.application;
 
+import com.feesaas.auth.domain.AuthUser;
+import com.feesaas.auth.infra.AuthUserRepository;
+import com.feesaas.auth.infra.IdentityRepository;
 import com.feesaas.shared.error.ApiException;
 import com.feesaas.shared.error.ErrorCode;
 import com.feesaas.shared.security.CurrentUser;
@@ -24,12 +27,22 @@ import org.springframework.transaction.annotation.Transactional;
 public class StaffService {
 
     private final StaffRepository staff;
+    private final AuthUserRepository users;
+    private final IdentityRepository identity;
     private final PasswordEncoder passwords;
     private final PermissionLookup permissionLookup;
     private final UsageGuard usage;
 
-    public StaffService(StaffRepository staff, PasswordEncoder passwords, PermissionLookup permissionLookup, UsageGuard usage) {
+    public StaffService(
+            StaffRepository staff,
+            AuthUserRepository users,
+            IdentityRepository identity,
+            PasswordEncoder passwords,
+            PermissionLookup permissionLookup,
+            UsageGuard usage) {
         this.staff = staff;
+        this.users = users;
+        this.identity = identity;
         this.passwords = passwords;
         this.permissionLookup = permissionLookup;
         this.usage = usage;
@@ -60,11 +73,41 @@ public class StaffService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Email or phone is required.");
         }
         List<String> permissions = resolveGrants(cmd.permissions());
+        if (cmd.email() != null && !cmd.email().isBlank()) {
+            var existing = users.findByIdentifier(cmd.email().trim());
+            if (existing.isPresent()) {
+                return attachExisting(existing.get(), tenantId, cmd, permissions);
+            }
+        }
+        if (cmd.password() == null || cmd.password().isBlank()) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Password is required for a new staff account.");
+        }
         UUID id = staff.insert(
                 tenantId, cmd.email(), cmd.phone(), cmd.fullName(),
                 passwords.encode(cmd.password()), "STAFF", "ACTIVE");
         staff.replacePermissions(tenantId, id, permissions);
         return toView(staff.findStaffById(id).orElseThrow());
+    }
+
+    private StaffView attachExisting(AuthUser existing, UUID tenantId, CreateStaffCommand cmd, List<String> permissions) {
+        if (existing.tenantId() != null && !tenantId.equals(existing.tenantId())) {
+            throw new ApiException(ErrorCode.CONFLICT, "That email already belongs to another business.");
+        }
+        if (existing.tenantId() != null && tenantId.equals(existing.tenantId())) {
+            throw new ApiException(ErrorCode.CONFLICT, "That person is already on this gym.");
+        }
+        if (!"INDIVIDUAL".equals(existing.roleCode())) {
+            throw new ApiException(ErrorCode.CONFLICT, "That email is already in use.");
+        }
+        if (staff.convertIndividualToStaff(existing.id(), tenantId, cmd.fullName()) == 0) {
+            throw new ApiException(ErrorCode.CONFLICT, "Could not add that individual as staff.");
+        }
+        if (cmd.password() != null && !cmd.password().isBlank()) {
+            users.bumpTokenVersionAndSetPassword(existing.id(), passwords.encode(cmd.password()));
+        }
+        identity.provisionHats(existing.id(), tenantId, "STAFF");
+        staff.replacePermissions(tenantId, existing.id(), permissions);
+        return toView(staff.findStaffById(existing.id()).orElseThrow());
     }
 
     @PreAuthorize("hasPermission(null, 'staff.manage')")

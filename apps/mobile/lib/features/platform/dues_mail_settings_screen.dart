@@ -54,7 +54,10 @@ class _DuesMailSettingsScreenState extends ConsumerState<DuesMailSettingsScreen>
     _port.text = '${s.smtpPort}';
     _user.text = s.smtpUsername ?? '';
     _from.text = s.smtpFrom ?? '';
-    _last = [s.lastRunAt, s.lastResult].whereType<String>().where((e) => e.isNotEmpty).join('\n');
+    _last = [
+      if (s.lastRunAt != null && s.lastRunAt!.isNotEmpty) formatLocalDateTime(s.lastRunAt),
+      if (s.lastResult != null && s.lastResult!.isNotEmpty) s.lastResult!,
+    ].join('\n');
   }
 
   @override

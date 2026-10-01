@@ -424,22 +424,32 @@ class Customer {
 
   factory Customer.fromJson(Map<String, dynamic> json) {
     return Customer(
-      id: json['id'] as String,
-      customerCode: json['customerCode'] as String,
-      fullName: json['fullName'] as String,
-      phone: json['phone'] as String?,
-      email: json['email'] as String?,
-      status: json['status'] as String,
-      notes: json['notes'] as String?,
-      dueDate: json['dueDate'] as String?,
-      createdAt: json['createdAt'] as String?,
-      feePlanId: json['feePlanId'] as String?,
-      feePlanName: json['feePlanName'] as String?,
+      id: _asString(json['id']) ?? '',
+      customerCode: _asString(json['customerCode']) ?? '',
+      fullName: _asString(json['fullName']) ?? '',
+      phone: _asString(json['phone']),
+      email: _asString(json['email']),
+      status: _asString(json['status']) ?? '',
+      notes: _asString(json['notes']),
+      dueDate: _asString(json['dueDate']),
+      createdAt: _asString(json['createdAt']),
+      feePlanId: _asString(json['feePlanId']),
+      feePlanName: _asString(json['feePlanName']),
       hasWhatsapp: json['hasWhatsapp'] as bool? ?? true,
-      branchId: json['branchId'] as String?,
-      branchName: json['branchName'] as String?,
+      branchId: _asString(json['branchId']),
+      branchName: _asString(json['branchName']),
     );
   }
+}
+
+String? _asString(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is String) {
+    return value;
+  }
+  return value.toString();
 }
 
 class FeePlan {
@@ -669,6 +679,7 @@ class ReportOverview {
     required this.currency,
     required this.byPlan,
     required this.recentPayments,
+    this.periods = const [],
   });
 
   final int members;
@@ -693,6 +704,7 @@ class ReportOverview {
   final String currency;
   final List<PlanBreakdown> byPlan;
   final List<RecentPayment> recentPayments;
+  final List<ReportPeriod> periods;
 
   factory ReportOverview.fromJson(Map<String, dynamic> json) {
     return ReportOverview(
@@ -722,6 +734,9 @@ class ReportOverview {
       recentPayments: (json['recentPayments'] as List<dynamic>? ?? const [])
           .map((e) => RecentPayment.fromJson(e as Map<String, dynamic>))
           .toList(),
+      periods: (json['periods'] as List<dynamic>? ?? const [])
+          .map((e) => ReportPeriod.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
@@ -748,7 +763,31 @@ class ReportOverview {
         currency: 'INR',
         byPlan: const [],
         recentPayments: const [],
+        periods: const [],
       );
+}
+
+class ReportPeriod {
+  ReportPeriod({required this.year, required this.month});
+
+  final int year;
+  final int month;
+
+  String get label {
+    const names = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final name = month >= 1 && month <= 12 ? names[month - 1] : '$month';
+    return '$name $year';
+  }
+
+  factory ReportPeriod.fromJson(Map<String, dynamic> json) {
+    return ReportPeriod(
+      year: (json['year'] as num).toInt(),
+      month: (json['month'] as num).toInt(),
+    );
+  }
 }
 
 class PlanBreakdown {
@@ -1392,6 +1431,153 @@ class PlatformConfigRow {
     );
   }
 }
+
+class IndividualAccount {
+  IndividualAccount({
+    required this.id,
+    required this.fullName,
+    this.email,
+    this.phone,
+    required this.status,
+    this.lastLoginAt,
+    this.createdAt,
+    required this.groupMemberCount,
+    required this.groupsJoined,
+    required this.expenseCount,
+  });
+
+  final String id;
+  final String fullName;
+  final String? email;
+  final String? phone;
+  final String status;
+  final String? lastLoginAt;
+  final String? createdAt;
+  final int groupMemberCount;
+  final int groupsJoined;
+  final int expenseCount;
+
+  factory IndividualAccount.fromJson(Map<String, dynamic> json) {
+    return IndividualAccount(
+      id: json['id'].toString(),
+      fullName: json['fullName'] as String? ?? '',
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+      status: json['status'] as String? ?? '',
+      lastLoginAt: json['lastLoginAt'] as String?,
+      createdAt: json['createdAt'] as String?,
+      groupMemberCount: (json['groupMemberCount'] as num?)?.toInt() ?? 0,
+      groupsJoined: (json['groupsJoined'] as num?)?.toInt() ?? 0,
+      expenseCount: (json['expenseCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class JoinEnquiry {
+  JoinEnquiry({
+    required this.id,
+    required this.userId,
+    required this.fullName,
+    this.email,
+    this.phone,
+    required this.businessName,
+    this.city,
+    this.message,
+    required this.status,
+    this.createdAt,
+  });
+
+  final String id;
+  final String userId;
+  final String fullName;
+  final String? email;
+  final String? phone;
+  final String businessName;
+  final String? city;
+  final String? message;
+  final String status;
+  final String? createdAt;
+
+  factory JoinEnquiry.fromJson(Map<String, dynamic> json) {
+    return JoinEnquiry(
+      id: json['id'].toString(),
+      userId: json['userId'].toString(),
+      fullName: json['fullName'] as String? ?? '',
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+      businessName: json['businessName'] as String? ?? '',
+      city: json['city'] as String?,
+      message: json['message'] as String?,
+      status: json['status'] as String? ?? '',
+      createdAt: json['createdAt']?.toString(),
+    );
+  }
+}
+
+class SupportThread {
+  SupportThread({
+    required this.id,
+    required this.userId,
+    required this.fullName,
+    this.email,
+    this.lastBody,
+    this.lastAt,
+    this.unreadCount = 0,
+  });
+
+  final String id;
+  final String userId;
+  final String fullName;
+  final String? email;
+  final String? lastBody;
+  final String? lastAt;
+  final int unreadCount;
+
+  factory SupportThread.fromJson(Map<String, dynamic> json) {
+    return SupportThread(
+      id: json['id'].toString(),
+      userId: json['userId'].toString(),
+      fullName: json['fullName'] as String? ?? '',
+      email: json['email'] as String?,
+      lastBody: json['lastBody'] as String?,
+      lastAt: json['lastAt']?.toString(),
+      unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class SupportMessage {
+  SupportMessage({
+    required this.id,
+    required this.threadId,
+    this.authorUserId,
+    required this.fromPlatform,
+    required this.body,
+    this.createdAt,
+    this.authorName,
+  });
+
+  final String id;
+  final String threadId;
+  final String? authorUserId;
+  final bool fromPlatform;
+  final String body;
+  final String? createdAt;
+  final String? authorName;
+
+  factory SupportMessage.fromJson(Map<String, dynamic> json) {
+    return SupportMessage(
+      id: json['id'].toString(),
+      threadId: json['threadId'].toString(),
+      authorUserId: json['authorUserId']?.toString(),
+      fromPlatform: json['fromPlatform'] as bool? ?? false,
+      body: json['body'] as String? ?? '',
+      createdAt: json['createdAt']?.toString(),
+      authorName: json['authorName'] as String?,
+    );
+  }
+}
+
 
 
 

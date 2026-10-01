@@ -7,6 +7,7 @@ import com.feesaas.auth.infra.IdentityRepository;
 import com.feesaas.auth.infra.PasswordResetRepository;
 import com.feesaas.auth.infra.RefreshTokenRepository;
 import com.feesaas.auth.infra.RefreshTokenRepository.StoredRefreshToken;
+import com.feesaas.notify.infra.PlatformMailSettingsRepository;
 import com.feesaas.shared.error.ApiException;
 import com.feesaas.shared.error.ErrorCode;
 import com.feesaas.shared.security.AuthProperties;
@@ -41,6 +42,8 @@ public class AuthService {
     private final AuthProperties properties;
     private final TenantExecutor tenants;
     private final IdentityRepository identity;
+    private final PlatformMailSettingsRepository mailSettings;
+    private final SignupOtpSender otpSender;
     private final Clock clock;
     private final String dummyHash;
 
@@ -53,6 +56,8 @@ public class AuthService {
             AuthProperties properties,
             TenantExecutor tenants,
             IdentityRepository identity,
+            PlatformMailSettingsRepository mailSettings,
+            SignupOtpSender otpSender,
             Clock clock) {
         this.users = users;
         this.refreshTokens = refreshTokens;
@@ -62,6 +67,8 @@ public class AuthService {
         this.properties = properties;
         this.tenants = tenants;
         this.identity = identity;
+        this.mailSettings = mailSettings;
+        this.otpSender = otpSender;
         this.clock = clock;
         this.dummyHash = passwords.encode("feesaas-timing-guard");
     }
@@ -128,21 +135,39 @@ public class AuthService {
                 .ifPresent(stored -> refreshTokens.revokeFamily(stored.familyId()));
     }
 
-    public String forgotPassword(String identifier) {
+    public ForgotPasswordResult forgotPassword(String identifier) {
         AuthUser user = users.findByIdentifier(identifier.trim()).orElse(null);
         if (user == null || !"ACTIVE".equals(user.status())) {
-            return null;
+            return new ForgotPasswordResult(null, null);
         }
-        String raw = TokenHasher.randomUrlToken();
+        String email = identifier.contains("@")
+                ? identifier.trim()
+                : tenants.call(user.writeScope(), () ->
+                        identity.contact(user.id()).map(IdentityRepository.Contact::email).orElse(null));
+        if (email == null || email.isBlank()) {
+            return new ForgotPasswordResult(null, null);
+        }
+        String otp = TokenHasher.numericOtp(6);
         passwordResets.invalidateUnused(user.id());
-        passwordResets.insert(user.id(), TokenHasher.sha256(raw), clock.instant().plus(properties.resetTtl()));
-        log.info("Stub email: password reset requested for user {}", user.id());
-        return properties.exposeResetToken() ? raw : null;
+        UUID challengeId = passwordResets.insert(
+                user.id(),
+                TokenHasher.sha256(otp),
+                clock.instant().plus(properties.otpTtl()));
+        boolean expose = properties.exposeResetToken() || properties.exposeOtp();
+        try {
+            otpSender.sendPasswordOtp(mailSettings.load(), email.trim(), user.fullName(), otp);
+        } catch (RuntimeException e) {
+            if (!expose) {
+                throw e;
+            }
+            log.warn("Password OTP email skipped: {}", e.getMessage());
+        }
+        return new ForgotPasswordResult(challengeId, expose ? otp : null);
     }
 
-    public void resetPassword(String resetToken, String newPassword) {
-        var token = passwordResets.findActive(TokenHasher.sha256(resetToken))
-                .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED, "Invalid or expired reset token."));
+    public void resetPassword(UUID challengeId, String resetToken, String newPassword) {
+        var token = passwordResets.findActive(challengeId, TokenHasher.sha256(resetToken.trim()))
+                .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED, "Invalid or expired reset code."));
         SessionSnapshot session = users.session(token.userId()).orElseThrow(AuthService::unauthenticated);
         tenants.run(scopeFor(token.userId(), session, loginContext(users.findById(token.userId()).orElseThrow())), () -> {
             users.bumpTokenVersionAndSetPassword(token.userId(), passwords.encode(newPassword));
@@ -197,7 +222,8 @@ public class AuthService {
             }
             case "BUSINESS" -> {
                 UUID tid = tenantId != null ? tenantId : user.tenantId();
-                if (tid == null || user.tenantId() == null || !tid.equals(user.tenantId())) {
+                boolean owns = tid != null && tid.equals(user.tenantId());
+                if (tid == null || (!owns && !identity.hasBusinessMembership(user.id(), tid))) {
                     throw new ApiException(ErrorCode.FORBIDDEN, "You cannot open that business.");
                 }
                 yield AccessContext.business(tid);
@@ -336,4 +362,6 @@ public class AuthService {
     public record TokenPair(String accessToken, String refreshToken, long expiresIn, AuthUser user) {}
 
     public record Me(UUID id, String fullName, String role, UUID tenantId) {}
+
+    public record ForgotPasswordResult(UUID challengeId, String resetToken) {}
 }

@@ -23,6 +23,8 @@ void main() {
     expect(find.byType(DueMateLogo), findsWidgets);
     expect(find.text('Sign in to see who owes you money.'), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);
+    expect(find.text('Forgot password?'), findsOneWidget);
+    expect(find.text('Forgot password?'), findsOneWidget);
   });
 
   testWidgets('pending fees screen renders', (tester) async {

@@ -19,7 +19,7 @@ class StaffApi {
     required String fullName,
     String? email,
     String? phone,
-    required String password,
+    String? password,
     List<String>? permissions,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
@@ -28,7 +28,7 @@ class StaffApi {
         'fullName': fullName,
         if (email != null && email.isNotEmpty) 'email': email,
         if (phone != null && phone.isNotEmpty) 'phone': phone,
-        'password': password,
+        if (password != null && password.isNotEmpty) 'password': password,
         if (permissions != null) 'permissions': permissions,
       }),
       options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.json),

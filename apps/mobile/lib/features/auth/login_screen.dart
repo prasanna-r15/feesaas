@@ -61,22 +61,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          child: session.error == null
-              ? const SizedBox.shrink()
-              : Padding(
-                  key: ValueKey(session.error),
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(session.error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                ),
-        ),
+        if (session.error != null) ...[
+          const SizedBox(height: 12),
+          Text(session.error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ],
         const SizedBox(height: 22),
         FilledButton(
           onPressed: busy ? null : _submit,
           child: const Text('Sign in'),
         ),
-        const SizedBox(height: 16),
+        TextButton(
+          onPressed: busy ? null : () => context.go('/forgot'),
+          child: const Text('Forgot password?'),
+        ),
+        const SizedBox(height: 4),
         TextButton(
           onPressed: busy
               ? null

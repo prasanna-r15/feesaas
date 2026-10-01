@@ -1,3 +1,4 @@
+import 'package:feesaas_admin_web/admin_app_bar.dart';
 import 'package:feesaas_core/feesaas_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +12,10 @@ class TenantMembersPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_membersProvider(tenantId));
     return Scaffold(
-      appBar: AppBar(title: const Text('Members (read only)')),
+      appBar: AppBar(
+        title: const Text('Members (read only)'),
+        actions: const [AdminChatAction()],
+      ),
       body: async.when(
         loading: () => const FsLoading(),
         error: (e, _) => FsErrorState(message: problemOf(e).detail, onRetry: () => ref.invalidate(_membersProvider(tenantId))),

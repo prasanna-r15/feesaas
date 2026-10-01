@@ -11,7 +11,6 @@ import com.feesaas.shared.export.XlsxRows;
 import com.feesaas.shared.security.CurrentUser;
 import com.feesaas.shared.tenancy.TenantContext;
 import com.feesaas.tenant.application.UsageGuard;
-import com.feesaas.tenant.infra.TenantRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -33,7 +32,6 @@ public class CustomerImportService {
     private final CustomerRepository customers;
     private final FeeEnrollmentService enrollment;
     private final FeePlanRepository plans;
-    private final TenantRepository tenants;
     private final UsageGuard usage;
     private final CatalogRepository catalog;
 
@@ -41,13 +39,11 @@ public class CustomerImportService {
             CustomerRepository customers,
             FeeEnrollmentService enrollment,
             FeePlanRepository plans,
-            TenantRepository tenants,
             UsageGuard usage,
             CatalogRepository catalog) {
         this.customers = customers;
         this.enrollment = enrollment;
         this.plans = plans;
-        this.tenants = tenants;
         this.usage = usage;
         this.catalog = catalog;
     }
@@ -81,7 +77,7 @@ public class CustomerImportService {
         List<String> errors = new ArrayList<>();
         boolean header = true;
         int rowNum = 0;
-        UUID defaultPlan = defaultPlanId(tenantId);
+        UUID defaultPlan = defaultPlanId();
         for (List<String> cols : table) {
             rowNum++;
             if (cols.stream().allMatch(c -> c == null || c.isBlank())) {
@@ -176,9 +172,10 @@ public class CustomerImportService {
         return true;
     }
 
-    private UUID defaultPlanId(UUID tenantId) {
-        String currency = tenants.findById(tenantId).map(TenantRepository.TenantRow::currency).orElse("INR");
-        return plans.ensureDefault(tenantId, currency);
+    private UUID defaultPlanId() {
+        return plans.findDefaultOrAny()
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "Create a fee plan before importing members."));
     }
 
     private static boolean looksLikeHeader(List<String> cols) {

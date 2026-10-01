@@ -33,7 +33,7 @@ class FeePlanListScreen extends ConsumerWidget {
           if (plans.isEmpty) {
             return const FsEmptyState(
               title: 'No fee plans yet',
-              message: 'Add General, Cardio, PT, or any plan this business charges.',
+              message: 'Add a plan when you are ready to charge membership fees.',
             );
           }
           return ListView.separated(

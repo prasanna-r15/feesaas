@@ -1,3 +1,4 @@
+import 'package:feesaas_admin_web/admin_app_bar.dart';
 import 'package:feesaas_admin_web/slug.dart';
 import 'package:feesaas_admin_web/tenant_logo_field.dart';
 import 'package:feesaas_core/feesaas_core.dart';
@@ -71,7 +72,10 @@ class _CreateTenantPageState extends ConsumerState<CreateTenantPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('New tenant')),
+      appBar: AppBar(
+        title: const Text('New tenant'),
+        actions: const [AdminChatAction()],
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),

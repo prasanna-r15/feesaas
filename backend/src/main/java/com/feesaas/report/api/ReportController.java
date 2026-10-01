@@ -1,11 +1,13 @@
 package com.feesaas.report.api;
 
 import com.feesaas.report.api.dto.ReportOverviewResponse;
+import com.feesaas.report.api.dto.ReportOverviewResponse.Period;
 import com.feesaas.report.api.dto.ReportOverviewResponse.PlanBreakdown;
 import com.feesaas.report.api.dto.ReportOverviewResponse.RecentPayment;
 import com.feesaas.report.application.ReportService;
 import com.feesaas.report.application.ReportService.OverviewView;
 import com.feesaas.report.application.ReportService.ExportFile;
+import java.time.LocalDate;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -26,8 +28,11 @@ public class ReportController {
     }
 
     @GetMapping("/overview")
-    public ReportOverviewResponse overview() {
-        OverviewView view = reports.overview();
+    public ReportOverviewResponse overview(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) LocalDate paidOn) {
+        OverviewView view = reports.overview(year, month, paidOn);
         return new ReportOverviewResponse(
                 view.members(),
                 view.pendingCount(),
@@ -63,7 +68,8 @@ public class ReportController {
                                 p.source(),
                                 p.category(),
                                 p.branchName()))
-                        .toList());
+                        .toList(),
+                view.periods().stream().map(p -> new Period(p.year(), p.month())).toList());
     }
 
     @GetMapping("/export")

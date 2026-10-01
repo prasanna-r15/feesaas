@@ -1,3 +1,4 @@
+import 'package:feesaas_admin_web/admin_app_bar.dart';
 import 'package:feesaas_core/feesaas_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -54,14 +55,17 @@ class _MailSettingsPageState extends ConsumerState<MailSettingsPage> {
     _port.text = '${s.smtpPort}';
     _user.text = s.smtpUsername ?? '';
     _from.text = s.smtpFrom ?? '';
-    _last = [s.lastRunAt, s.lastResult].whereType<String>().where((e) => e.isNotEmpty).join('\n');
+    _last = [
+      if (s.lastRunAt != null && s.lastRunAt!.isNotEmpty) formatLocalDateTime(s.lastRunAt),
+      if (s.lastResult != null && s.lastResult!.isNotEmpty) s.lastResult!,
+    ].join('\n');
   }
 
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(adminMailProvider);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Pending dues email')),
+    return AdminScaffold(
+      title: 'Pending dues email',
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text(problemOf(e).detail)),

@@ -157,12 +157,14 @@ class AuthIT extends AbstractPostgresIT {
         MvcResult forgot = mvc.perform(post("/api/v1/auth/password/forgot").contentType(APPLICATION_JSON)
                         .content("{\"identifier\":\"%s\"}".formatted(user.email)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.challengeId").isNotEmpty())
                 .andExpect(jsonPath("$.resetToken").isNotEmpty())
                 .andReturn();
         String resetToken = json(forgot.getResponse().getContentAsString(), "resetToken");
 
         mvc.perform(post("/api/v1/auth/password/reset").contentType(APPLICATION_JSON)
-                        .content("{\"resetToken\":\"%s\",\"newPassword\":\"Resetpass1!\"}".formatted(resetToken)))
+                        .content("{\"challengeId\":\"%s\",\"resetToken\":\"%s\",\"newPassword\":\"Resetpass1!\"}"
+                                .formatted(json(forgot.getResponse().getContentAsString(), "challengeId"), resetToken)))
                 .andExpect(status().isNoContent());
 
         mvc.perform(post("/api/v1/auth/login").contentType(APPLICATION_JSON).content(loginJson(user.email, "Resetpass1!")))

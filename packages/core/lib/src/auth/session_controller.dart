@@ -34,15 +34,26 @@ class SessionController extends StateNotifier<SessionState> {
 
   Future<void> restore() async {
     try {
-      final access = await _store.readAccess();
-      final refresh = await _store.readRefresh();
+      String? access;
+      String? refresh;
+      for (var i = 0; i < 3; i++) {
+        access = await _store.readAccess();
+        refresh = await _store.readRefresh();
+        if (access != null || refresh != null) {
+          break;
+        }
+        if (i < 2) {
+          await Future<void>.delayed(Duration(milliseconds: 80 * (i + 1)));
+        }
+      }
       if (access == null && refresh == null) {
         state = SessionState.signedOut;
         return;
       }
       await _loadBootstrap();
     } catch (_) {
-      state = SessionState.signedOut;
+      final refresh = await _store.readRefresh();
+      state = refresh == null ? SessionState.signedOut : SessionState.signedIn;
     }
   }
 
@@ -127,7 +138,14 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   Future<void> completeOnboarding() async {
-    await _api.completeOnboarding();
+    try {
+      await _api.completeOnboarding();
+    } catch (e) {
+      final problem = problemOf(e);
+      if (problem.status >= 400 && problem.status != 204) {
+        rethrow;
+      }
+    }
     await _loadBootstrap();
   }
 
@@ -156,12 +174,21 @@ class SessionController extends StateNotifier<SessionState> {
       state = config.isSuspended ? SessionState.suspended : SessionState.signedIn;
     } catch (e) {
       final problem = problemOf(e);
-      if (problem.code == 'TENANT_SUSPENDED' || problem.status == 403) {
+      if (problem.code == 'TENANT_SUSPENDED') {
         state = SessionState.suspended;
         return;
       }
-      await _store.clearTokens();
-      _ref.read(tenantConfigProvider.notifier).state = null;
+      if (problem.status == 401) {
+        await _store.clearTokens();
+        _ref.read(tenantConfigProvider.notifier).state = null;
+        state = SessionState.signedOut;
+        return;
+      }
+      final refresh = await _store.readRefresh();
+      if (refresh != null) {
+        state = SessionState.signedIn;
+        return;
+      }
       state = SessionState.signedOut;
     }
   }

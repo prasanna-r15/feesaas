@@ -78,9 +78,69 @@ public class IdentityRepository {
     }
 
     public void completeOnboarding(UUID userId) {
-        jdbc.sql("update user_profiles set onboarding_done = true, updated_at = now() where user_id = :id")
+        jdbc.sql("""
+                insert into user_profiles (user_id, default_kind, default_workspace_id, onboarding_done)
+                values (:id, 'PERSONAL', auth_workspace_of(:id), true)
+                on conflict (user_id) do update set
+                  onboarding_done = true,
+                  updated_at = now()
+                """)
                 .param("id", userId)
                 .update();
+    }
+
+    public UUID ensurePersonalWorkspace(UUID userId) {
+        return jdbc.sql("select auth_ensure_personal_workspace(:id)")
+                .param("id", userId)
+                .query(UUID.class)
+                .optional()
+                .orElse(null);
+    }
+
+    public Optional<Contact> contact(UUID userId) {
+        return jdbc.sql("select full_name, email, phone from users where id = :id")
+                .param("id", userId)
+                .query((rs, i) -> new Contact(
+                        rs.getString("full_name"),
+                        rs.getString("email"),
+                        rs.getString("phone")))
+                .optional();
+    }
+
+    public boolean hasBusinessMembership(UUID userId, UUID tenantId) {
+        if (userId == null || tenantId == null) {
+            return false;
+        }
+        Integer found = jdbc.sql("""
+                select 1 from user_memberships
+                 where user_id = :id and kind = 'BUSINESS' and business_tenant_id = :tid
+                 limit 1
+                """)
+                .param("id", userId)
+                .param("tid", tenantId)
+                .query(Integer.class)
+                .optional()
+                .orElse(null);
+        return found != null;
+    }
+
+    public void attachBusinessMembership(UUID userId, UUID tenantId, String roleCode) {
+        jdbc.sql("select auth_attach_business_membership(:id, :tid, :role)")
+                .param("id", userId)
+                .param("tid", tenantId)
+                .param("role", roleCode)
+                .query(Integer.class)
+                .optional();
+    }
+
+    public void provisionHats(UUID userId, UUID tenantId, String businessRole) {
+        UUID ws = ensurePersonalWorkspace(userId);
+        if (ws != null) {
+            seedCategories(ws);
+        }
+        if (tenantId != null && businessRole != null) {
+            attachBusinessMembership(userId, tenantId, businessRole);
+        }
     }
 
     public List<ContextRow> memberships(UUID userId) {
@@ -106,6 +166,8 @@ public class IdentityRepository {
                         rs.getString("group_name")))
                 .list();
     }
+
+    public record Contact(String fullName, String email, String phone) {}
 
     public record ProfileRow(
             UUID userId,

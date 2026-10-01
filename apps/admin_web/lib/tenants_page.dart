@@ -1,3 +1,4 @@
+import 'package:feesaas_admin_web/admin_app_bar.dart';
 import 'package:feesaas_core/feesaas_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,30 +38,20 @@ class _TenantsPageState extends ConsumerState<TenantsPage> {
   Widget build(BuildContext context) {
     final async = ref.watch(tenantsProvider);
     final filter = ref.watch(tenantFilterProvider);
-    return Scaffold(
-      appBar: AppBar(
-        leading: const Padding(padding: EdgeInsets.all(6), child: DueMateLogo(height: 36)),
-        title: const Text('Tenants'),
-        actions: [
-          TextButton(
-            onPressed: () => context.push('/mail'),
-            child: const Text('Dues email'),
-          ),
-          TextButton(
-            onPressed: () => context.push('/config'),
-            child: const Text('Config'),
-          ),
-          TextButton(
-            onPressed: () => ref.read(sessionControllerProvider.notifier).logout(),
-            child: const Text('Sign out'),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/tenants/new'),
-        label: const Text('New tenant'),
-        icon: const Icon(Icons.add),
-      ),
+    final narrow = MediaQuery.sizeOf(context).width < 720;
+    return AdminScaffold(
+      title: 'Tenants',
+      floatingActionButton: narrow
+          ? FloatingActionButton(
+              onPressed: () => context.push('/tenants/new'),
+              tooltip: 'New tenant',
+              child: const Icon(Icons.add),
+            )
+          : FloatingActionButton.extended(
+              onPressed: () => context.push('/tenants/new'),
+              label: const Text('New tenant'),
+              icon: const Icon(Icons.add),
+            ),
       body: Column(
         children: [
           Padding(
@@ -116,30 +107,50 @@ class _TenantsPageState extends ConsumerState<TenantsPage> {
                       delay: Duration(milliseconds: 40 * (i > 8 ? 8 : i)),
                       child: FsCard(
                         onTap: () => context.push('/tenants/${t.id}'),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          leading: _TenantListLogo(tenant: t),
-                          title: Text(
-                            t.displayName?.isNotEmpty == true ? t.displayName! : t.name,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Text(
-                            [
-                              t.slug,
-                              t.planCode ?? '',
-                              t.billingStatus ?? '',
-                              '$used/$cap members',
-                              if (t.lastLoginAt != null) 'login ${t.lastLoginAt!.split('T').first}',
-                            ].where((e) => e.isNotEmpty).join(' · '),
-                          ),
-                          isThreeLine: true,
-                          trailing: FsStatusChip(
-                            label: t.status,
-                            tone: t.status == 'ACTIVE' || t.status == 'ONBOARDING'
-                                ? FsTone.success
-                                : t.status == 'CANCELLED'
-                                    ? FsTone.danger
-                                    : FsTone.warning,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _TenantListLogo(tenant: t),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 6,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      children: [
+                                        Text(
+                                          t.displayName?.isNotEmpty == true ? t.displayName! : t.name,
+                                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                                        ),
+                                        FsStatusChip(
+                                          label: t.status,
+                                          tone: t.status == 'ACTIVE' || t.status == 'ONBOARDING'
+                                              ? FsTone.success
+                                              : t.status == 'CANCELLED'
+                                                  ? FsTone.danger
+                                                  : FsTone.warning,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      [
+                                        t.slug,
+                                        t.planCode ?? '',
+                                        t.billingStatus ?? '',
+                                        '$used/$cap members',
+                                        if (t.lastLoginAt != null) 'login ${formatLocalDateTime(t.lastLoginAt)}',
+                                      ].where((e) => e.isNotEmpty).join(' · '),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

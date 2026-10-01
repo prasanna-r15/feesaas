@@ -143,6 +143,50 @@ class PlatformTenantIT extends AbstractPostgresIT {
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
     }
 
+    @Test
+    void newTenantHasNoSeededFeePlansAndPlatformCanCrudThem() throws Exception {
+        String platformToken = platformToken();
+        String slug = "plans-" + UUID.randomUUID().toString().substring(0, 8);
+        String created = mvc.perform(post("/api/v1/platform/tenants")
+                        .header("Authorization", "Bearer " + platformToken)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"name":"Plan Gym","slug":"%s","businessType":"GYM",
+                                 "owner":{"fullName":"O","email":"o-%s@example.com","password":"%s"}}
+                                """.formatted(slug, slug, TestAuth.PASSWORD)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String tenantId = TestAuth.jsonField(created, "id");
+
+        mvc.perform(get("/api/v1/platform/tenants")
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/platform/tenants/" + tenantId)
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Plan Gym"));
+        mvc.perform(get("/api/v1/platform/tenants/" + tenantId + "/fee-plans")
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        mvc.perform(post("/api/v1/platform/tenants/" + tenantId + "/fee-plans")
+                        .header("Authorization", "Bearer " + platformToken)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"name":"Monthly","amountMinor":150000,"billingCycle":"MONTHLY","graceDays":0,"isDefault":true}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].name").value("Monthly"))
+                .andExpect(jsonPath("$[0].isDefault").value(true));
+
+        mvc.perform(get("/api/v1/platform/tenants/" + tenantId)
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk());
+    }
+
     private String platformToken() throws Exception {
         String email = "admin-" + UUID.randomUUID() + "@feesaas.local";
         ownerJdbc().update("""

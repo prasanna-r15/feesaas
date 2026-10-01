@@ -39,7 +39,7 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
       await ref.read(staffApiProvider).create(
             fullName: _name.text.trim(),
             email: _email.text.trim(),
-            password: _password.text,
+            password: _password.text.trim().isEmpty ? null : _password.text,
             permissions: _selected.isEmpty ? null : _selected.toList(),
           );
       if (mounted) {
@@ -66,7 +66,12 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
           const SizedBox(height: 12),
           TextField(controller: _email, decoration: const InputDecoration(labelText: 'Email')),
           const SizedBox(height: 12),
-          TextField(controller: _password, obscureText: true, decoration: const InputDecoration(labelText: 'Temporary password')),
+          TextField(controller: _password, obscureText: true, decoration: const InputDecoration(labelText: 'Temporary password (optional if they already have DueMate)')),
+          const SizedBox(height: 8),
+          Text(
+            'If this email already uses DueMate as an individual, they keep expenses and groups. They can switch between gym and My money with the same login.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 20),
           Text('Permissions', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),

@@ -13,6 +13,7 @@ class TenantConfig {
   List<String> get modules => tenant?.modules ?? const [];
   bool get isPlatform => user.role == 'PLATFORM_SUPER_ADMIN';
   bool get isPersonal => bootstrap.activeContext?.kind == 'PERSONAL' || (tenant == null && !isPlatform);
+  bool get hasBusinessHat => bootstrap.contexts.any((c) => c.kind == 'BUSINESS');
   bool get isSuspended => tenant?.status == 'SUSPENDED' || tenant?.status == 'CANCELLED';
   bool get needsOnboarding => bootstrap.needsOnboarding;
 

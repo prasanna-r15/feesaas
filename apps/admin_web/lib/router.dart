@@ -2,7 +2,10 @@ import 'package:feesaas_admin_web/mail_settings_page.dart';
 import 'package:feesaas_admin_web/config_page.dart';
 import 'package:feesaas_admin_web/create_tenant_page.dart';
 import 'package:feesaas_admin_web/edit_tenant_page.dart';
+import 'package:feesaas_admin_web/individuals_page.dart';
+import 'package:feesaas_admin_web/join_enquiries_page.dart';
 import 'package:feesaas_admin_web/login_page.dart';
+import 'package:feesaas_admin_web/support_inbox_page.dart';
 import 'package:feesaas_admin_web/tenant_members_page.dart';
 import 'package:feesaas_admin_web/tenants_page.dart';
 import 'package:feesaas_core/feesaas_core.dart';
@@ -16,7 +19,7 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: _Refresh(ref),
     redirect: (context, state) {
       final session = ref.read(sessionControllerProvider);
-      final loggingIn = state.matchedLocation == '/login';
+      final loggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/forgot';
       return switch (session.status) {
         AuthStatus.unknown => loggingIn ? null : '/login',
         AuthStatus.signedOut => loggingIn ? null : '/login',
@@ -26,7 +29,15 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/login', builder: (c, s) => const AdminLoginPage()),
+      GoRoute(path: '/forgot', builder: (c, s) => const ForgotPasswordScreen()),
       GoRoute(path: '/tenants', builder: (c, s) => const TenantsPage()),
+      GoRoute(path: '/individuals', builder: (c, s) => const IndividualsPage()),
+      GoRoute(path: '/join-enquiries', builder: (c, s) => const JoinEnquiriesPage()),
+      GoRoute(path: '/support', builder: (c, s) => const SupportInboxPage()),
+      GoRoute(
+        path: '/support/:id',
+        builder: (c, s) => SupportThreadPage(threadId: s.pathParameters['id']!),
+      ),
       GoRoute(path: '/mail', builder: (c, s) => const MailSettingsPage()),
       GoRoute(path: '/config', builder: (c, s) => const ConfigPage()),
       GoRoute(path: '/tenants/new', builder: (c, s) => const CreateTenantPage()),

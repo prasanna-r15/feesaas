@@ -72,7 +72,7 @@ public class AttendanceService {
         }
     }
 
-    @PreAuthorize("hasPermission(null, 'batches.manage')")
+    @PreAuthorize("hasPermission(null, 'batches.manage') or hasPermission(null, 'attendance.manage')")
     @Transactional(readOnly = true)
     public List<MemberView> members(UUID batchId) {
         TenantContext.requireTenantId();
@@ -82,7 +82,7 @@ public class AttendanceService {
                 .toList();
     }
 
-    @PreAuthorize("hasPermission(null, 'batches.manage')")
+    @PreAuthorize("hasPermission(null, 'batches.manage') or hasPermission(null, 'attendance.manage')")
     @Transactional
     public void addMember(UUID batchId, UUID customerId) {
         UUID tenantId = TenantContext.requireTenantId();

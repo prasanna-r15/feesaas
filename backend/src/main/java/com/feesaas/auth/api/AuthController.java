@@ -66,13 +66,14 @@ public class AuthController {
 
     @PostMapping("/password/forgot")
     public ForgotPasswordResponse forgot(@Valid @RequestBody ForgotPasswordRequest request) {
-        return new ForgotPasswordResponse(true, auth.forgotPassword(request.identifier()));
+        var result = auth.forgotPassword(request.identifier());
+        return new ForgotPasswordResponse(true, result.challengeId(), result.resetToken());
     }
 
     @PostMapping("/password/reset")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void reset(@Valid @RequestBody ResetPasswordRequest request) {
-        auth.resetPassword(request.resetToken(), request.newPassword());
+        auth.resetPassword(request.challengeId(), request.resetToken(), request.newPassword());
     }
 
     @PostMapping("/password/change")

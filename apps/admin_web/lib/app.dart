@@ -9,6 +9,7 @@ class AdminApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(adminRouterProvider);
+    ref.watch(platformSupportUnreadProvider);
     return MaterialApp.router(
       title: 'DueMate Admin',
       debugShowCheckedModeBanner: false,

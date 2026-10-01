@@ -38,7 +38,7 @@ public class BatchRepository {
                 select b.id, b.name, b.schedule,
                        (select count(*) from batch_members m where m.batch_id = b.id) as members
                   from batches b
-                 where b.deleted_at is null
+                 where b.deleted_at is null and b.tenant_id = app_tenant_id()
                  order by b.name
                 """)
                 .query(this::mapBatch)
@@ -50,7 +50,7 @@ public class BatchRepository {
                 select b.id, b.name, b.schedule,
                        (select count(*) from batch_members m where m.batch_id = b.id) as members
                   from batches b
-                 where b.id = :id and b.deleted_at is null
+                 where b.id = :id and b.deleted_at is null and b.tenant_id = app_tenant_id()
                 """)
                 .param("id", id)
                 .query(this::mapBatch)
@@ -61,7 +61,7 @@ public class BatchRepository {
         if (excluding == null) {
             return jdbc.sql("""
                     select count(*) from batches
-                     where lower(name) = lower(:name) and deleted_at is null
+                     where lower(name) = lower(:name) and deleted_at is null and tenant_id = app_tenant_id()
                     """)
                     .param("name", name)
                     .query(Long.class)
@@ -69,7 +69,7 @@ public class BatchRepository {
         }
         return jdbc.sql("""
                 select count(*) from batches
-                 where lower(name) = lower(:name) and deleted_at is null and id <> :id
+                 where lower(name) = lower(:name) and deleted_at is null and id <> :id and tenant_id = app_tenant_id()
                 """)
                 .param("name", name)
                 .param("id", excluding)
@@ -84,7 +84,7 @@ public class BatchRepository {
                        schedule = coalesce(:schedule, schedule),
                        updated_at = now(),
                        version = version + 1
-                 where id = :id and deleted_at is null
+                 where id = :id and deleted_at is null and tenant_id = app_tenant_id()
                 """)
                 .param("name", name, Types.VARCHAR)
                 .param("schedule", schedule, Types.VARCHAR)
@@ -96,7 +96,7 @@ public class BatchRepository {
         return jdbc.sql("""
                 update batches
                    set deleted_at = now(), updated_at = now(), version = version + 1
-                 where id = :id and deleted_at is null
+                 where id = :id and deleted_at is null and tenant_id = app_tenant_id()
                 """)
                 .param("id", id)
                 .update();
@@ -115,7 +115,7 @@ public class BatchRepository {
     }
 
     public int removeMember(UUID batchId, UUID customerId) {
-        return jdbc.sql("delete from batch_members where batch_id = :batchId and customer_id = :customerId")
+        return jdbc.sql("delete from batch_members where batch_id = :batchId and customer_id = :customerId and tenant_id = app_tenant_id()")
                 .param("batchId", batchId)
                 .param("customerId", customerId)
                 .update();
@@ -126,7 +126,7 @@ public class BatchRepository {
                 select c.id, c.customer_code, c.full_name, c.phone
                   from batch_members m
                   join customers c on c.id = m.customer_id
-                 where m.batch_id = :id and c.deleted_at is null
+                 where m.batch_id = :id and c.deleted_at is null and m.tenant_id = app_tenant_id()
                  order by c.full_name
                 """)
                 .param("id", batchId)

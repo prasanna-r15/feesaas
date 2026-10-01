@@ -16,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /** Every error leaves the API as application/problem+json with a stable machine-readable code. */
@@ -34,6 +35,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     ProblemDetail handleDenied(AccessDeniedException ex) {
         return problem(ErrorCode.FORBIDDEN, "You do not have permission to perform this action.");
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return problem(ErrorCode.VALIDATION_FAILED, "That link is not a valid id.");
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

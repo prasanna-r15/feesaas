@@ -9,27 +9,28 @@ import com.feesaas.shared.error.ErrorCode;
 import com.feesaas.shared.tenancy.TenantContext;
 import java.time.LocalDate;
 import java.util.UUID;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class FeeEnrollmentService {
 
+    private static final Logger log = LoggerFactory.getLogger(FeeEnrollmentService.class);
+
     private final FeePlanRepository plans;
     private final CustomerFeePlanRepository enrollments;
     private final FeeRepository fees;
-    private final JdbcClient jdbc;
 
     public FeeEnrollmentService(
             FeePlanRepository plans,
             CustomerFeePlanRepository enrollments,
-            FeeRepository fees,
-            JdbcClient jdbc) {
+            FeeRepository fees) {
         this.plans = plans;
         this.enrollments = enrollments;
         this.fees = fees;
-        this.jdbc = jdbc;
     }
 
     @Transactional
@@ -40,9 +41,16 @@ public class FeeEnrollmentService {
     @Transactional
     public void enrollAndGenerate(UUID customerId, LocalDate dueDate, UUID planId) {
         UUID tenantId = TenantContext.requireTenantId();
+        if (!enrollments.customerInTenant(tenantId, customerId)) {
+            log.warn("Skip fee enrollment; customer {} is not in tenant {}", customerId, tenantId);
+            return;
+        }
         LocalDate due = dueDate == null ? LocalDate.now().plusDays(14) : dueDate;
-        plans.seedStarterPlans(tenantId, tenantCurrency(tenantId));
-        UUID resolved = planId != null ? planId : plans.ensureDefault(tenantId, tenantCurrency(tenantId));
+        UUID resolved = planId != null ? planId : plans.findDefaultOrAny().orElse(null);
+        if (resolved == null) {
+            log.warn("Skip fee enrollment; no fee plan for tenant {}", tenantId);
+            return;
+        }
         PlanRow plan = plans.findById(resolved)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "Fee plan not found."));
         var active = enrollments.findActive(customerId);
@@ -77,12 +85,21 @@ public class FeeEnrollmentService {
     @Transactional
     public void backfillCurrentTenant() {
         UUID tenantId = TenantContext.requireTenantId();
-        plans.seedStarterPlans(tenantId, tenantCurrency(tenantId));
-        for (var row : enrollments.customersNeedingEnrollment()) {
-            enrollAndGenerate(row.customerId(), row.dueDate(), null);
+        for (var row : enrollments.customersNeedingEnrollment(tenantId)) {
+            enrollQuietly(row.customerId(), row.dueDate());
         }
-        for (var row : enrollments.customersNeedingCurrentFee()) {
-            enrollAndGenerate(row.customerId(), row.dueDate(), null);
+        for (var row : enrollments.customersNeedingCurrentFee(tenantId)) {
+            enrollQuietly(row.customerId(), row.dueDate());
+        }
+    }
+
+    private void enrollQuietly(UUID customerId, LocalDate dueDate) {
+        try {
+            enrollAndGenerate(customerId, dueDate, null);
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Skip fee enrollment for customer {}: {}", customerId, e.getMostSpecificCause().getMessage());
+        } catch (ApiException e) {
+            log.warn("Skip fee enrollment for customer {}: {}", customerId, e.getMessage());
         }
     }
 
@@ -99,14 +116,5 @@ public class FeeEnrollmentService {
                 plan.graceDays(),
                 plan.amountMinor(),
                 plan.currency());
-    }
-
-    private String tenantCurrency(UUID tenantId) {
-        return jdbc.sql("select currency from tenants where id = :id")
-                .param("id", tenantId)
-                .query(String.class)
-                .optional()
-                .map(String::trim)
-                .orElse("INR");
     }
 }

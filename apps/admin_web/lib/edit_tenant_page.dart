@@ -1,3 +1,4 @@
+import 'package:feesaas_admin_web/admin_app_bar.dart';
 import 'package:feesaas_admin_web/slug.dart';
 import 'package:feesaas_admin_web/tenant_logo_field.dart';
 import 'package:feesaas_admin_web/tenants_page.dart';
@@ -51,6 +52,7 @@ class _EditTenantPageState extends ConsumerState<EditTenantPage> {
   List<Map<String, dynamic>> _branches = [];
   List<Map<String, dynamic>> _addons = [];
   List<Map<String, dynamic>> _diets = [];
+  List<Map<String, dynamic>> _feePlans = [];
 
   static const _core = ['CUSTOMERS', 'SETTINGS', 'NOTIFICATIONS', 'REPORTS'];
   static const _optional = [
@@ -106,11 +108,13 @@ class _EditTenantPageState extends ConsumerState<EditTenantPage> {
       final branches = await api.tenantBranches(widget.tenantId);
       final addons = await api.tenantAddons(widget.tenantId);
       final diets = await api.tenantDiets(widget.tenantId);
+      final feePlans = await api.tenantFeePlans(widget.tenantId);
       if (mounted) {
         setState(() {
           _branches = branches;
           _addons = addons;
           _diets = diets;
+          _feePlans = feePlans;
         });
       }
     } catch (_) {}
@@ -177,9 +181,10 @@ class _EditTenantPageState extends ConsumerState<EditTenantPage> {
         phone: _ownerPhone.text.trim(),
       );
       if (mounted) {
+        _originalLogo = _logo;
+        _clearLogo = false;
         ref.invalidate(tenantsProvider);
         ref.invalidate(tenantDetailProvider(widget.tenantId));
-        setState(() => _loaded = false);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved')));
       }
     } catch (e) {
@@ -220,6 +225,7 @@ class _EditTenantPageState extends ConsumerState<EditTenantPage> {
       appBar: AppBar(
         title: const Text('Tenant workspace'),
         actions: [
+          const AdminChatAction(),
           TextButton(onPressed: () => context.push('/tenants/${widget.tenantId}/members'), child: const Text('Members')),
         ],
       ),
@@ -241,8 +247,12 @@ class _EditTenantPageState extends ConsumerState<EditTenantPage> {
                     status: _status,
                     members: '${tenant.memberCount ?? 0}/${tenant.maxMembers ?? 0}',
                     staff: '${tenant.staffCount ?? 0}/${tenant.maxStaff ?? 0}',
-                    lastLogin: tenant.lastLoginAt ?? 'never',
-                    lastCollection: tenant.lastCollectionOn ?? 'none',
+                    lastLogin: formatLocalDateTime(tenant.lastLoginAt, dateOnly: false).isEmpty
+                        ? 'never'
+                        : formatLocalDateTime(tenant.lastLoginAt),
+                    lastCollection: tenant.lastCollectionOn == null || tenant.lastCollectionOn!.isEmpty
+                        ? 'none'
+                        : formatLocalDateTime(tenant.lastCollectionOn, dateOnly: true),
                   ),
                   const SizedBox(height: 16),
                   _Section(
@@ -389,6 +399,27 @@ class _EditTenantPageState extends ConsumerState<EditTenantPage> {
                     ),
                   ),
                   _Section(
+                    title: 'Fee plans',
+                    subtitle: 'Membership packages for this gym only. Nothing is seeded — add plans here or let the gym create them.',
+                    child: _NamedList(
+                      rows: _feePlans,
+                      empty: 'No fee plans yet. Add one if this gym should collect membership fees.',
+                      subtitleOf: (r) {
+                        final label = r['amountLabel'] as String? ??
+                            '₹${(((r['amountMinor'] as num?)?.toInt() ?? 0) / 100).toStringAsFixed(2)}';
+                        final cycle = r['billingCycle'] as String? ?? 'MONTHLY';
+                        final def = r['isDefault'] == true ? ' · Default' : '';
+                        return '$label · $cycle$def';
+                      },
+                      onEdit: (row) => _editFeePlan(row),
+                      onAdd: () => _editFeePlan(null),
+                      onDelete: (id) async {
+                        _feePlans = await ref.read(platformApiProvider).deleteTenantFeePlan(widget.tenantId, id);
+                        setState(() {});
+                      },
+                    ),
+                  ),
+                  _Section(
                     title: 'Extras catalogue',
                     subtitle: 'Protein, diet packs, and other items collected separately from membership fees.',
                     child: _NamedList(
@@ -424,6 +455,42 @@ class _EditTenantPageState extends ConsumerState<EditTenantPage> {
                       rows: _diets,
                       empty: 'No charts yet. Add a fat-loss or muscle-gain template.',
                       subtitleOf: (r) => (r['body'] as String?) ?? '',
+                      onEdit: (row) async {
+                        final name = TextEditingController(text: '${row['name'] ?? ''}');
+                        final body = TextEditingController(text: '${row['body'] ?? ''}');
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Edit diet chart'),
+                            content: SizedBox(
+                              width: 520,
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),
+                                    const SizedBox(height: 12),
+                                    DietEditor(controller: body),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+                            ],
+                          ),
+                        );
+                        if (ok == true && name.text.trim().isNotEmpty && body.text.trim().isNotEmpty) {
+                          _diets = await ref.read(platformApiProvider).patchTenantDiet(
+                                widget.tenantId,
+                                row['id'] as String,
+                                name: name.text.trim(),
+                                body: body.text.trim(),
+                              );
+                          setState(() {});
+                        }
+                      },
                       onAdd: () async {
                         final name = TextEditingController();
                         final body = TextEditingController();
@@ -556,7 +623,10 @@ class _EditTenantPageState extends ConsumerState<EditTenantPage> {
                             child: const Text('Save note'),
                           ),
                         ),
-                        ..._notes.map((n) => ListTile(title: Text('${n['body']}'), subtitle: Text('${n['author']} · ${n['createdAt']}'))),
+                        ..._notes.map((n) => ListTile(
+                              title: Text('${n['body']}'),
+                              subtitle: Text('${n['author']} · ${formatLocalDateTime('${n['createdAt']}')}'),
+                            )),
                       ],
                     ),
                   ),
@@ -607,7 +677,11 @@ class _EditTenantPageState extends ConsumerState<EditTenantPage> {
                     title: 'Audit',
                     child: Column(
                       children: _audit
-                          .map((a) => ListTile(dense: true, title: Text('${a['action']}'), subtitle: Text('${a['createdAt']}')))
+                          .map((a) => ListTile(
+                                dense: true,
+                                title: Text('${a['action']}'),
+                                subtitle: Text(formatLocalDateTime('${a['createdAt']}')),
+                              ))
                           .toList(),
                     ),
                   ),
@@ -618,6 +692,94 @@ class _EditTenantPageState extends ConsumerState<EditTenantPage> {
         },
       ),
     );
+  }
+
+  Future<void> _editFeePlan(Map<String, dynamic>? row) async {
+    final name = TextEditingController(text: '${row?['name'] ?? ''}');
+    final amount = TextEditingController(
+      text: row == null ? '' : (((row['amountMinor'] as num?)?.toInt() ?? 0) / 100).toStringAsFixed(2),
+    );
+    final grace = TextEditingController(text: '${row?['graceDays'] ?? 0}');
+    var cycle = (row?['billingCycle'] as String?) ?? 'MONTHLY';
+    var isDefault = row?['isDefault'] == true;
+    const cycles = ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'ANNUAL'];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(row == null ? 'New fee plan' : 'Edit fee plan'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: amount,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Amount in ₹'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: cycles.contains(cycle) ? cycle : 'MONTHLY',
+                  decoration: const InputDecoration(labelText: 'Billing cycle'),
+                  items: [
+                    for (final c in cycles) DropdownMenuItem(value: c, child: Text(c)),
+                  ],
+                  onChanged: (v) => setLocal(() => cycle = v ?? 'MONTHLY'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: grace,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Grace days'),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Default plan'),
+                  value: isDefault,
+                  onChanged: (v) => setLocal(() => isDefault = v ?? false),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(row == null ? 'Add' : 'Save')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || name.text.trim().isEmpty) {
+      return;
+    }
+    final rupees = double.tryParse(amount.text.trim()) ?? 0;
+    final days = int.tryParse(grace.text.trim()) ?? 0;
+    final api = ref.read(platformApiProvider);
+    if (row == null) {
+      _feePlans = await api.createTenantFeePlan(
+        widget.tenantId,
+        name: name.text.trim(),
+        amountMinor: (rupees * 100).round(),
+        billingCycle: cycle,
+        graceDays: days,
+        isDefault: isDefault,
+      );
+    } else {
+      _feePlans = await api.patchTenantFeePlan(
+        widget.tenantId,
+        '${row['id']}',
+        name: name.text.trim(),
+        amountMinor: (rupees * 100).round(),
+        billingCycle: cycle,
+        graceDays: days,
+        isDefault: isDefault,
+      );
+    }
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _promptAdd({
@@ -734,6 +896,7 @@ class _NamedList extends StatelessWidget {
     required this.empty,
     required this.onAdd,
     required this.onDelete,
+    this.onEdit,
     this.subtitleOf,
   });
 
@@ -741,6 +904,7 @@ class _NamedList extends StatelessWidget {
   final String empty;
   final VoidCallback onAdd;
   final Future<void> Function(String id) onDelete;
+  final Future<void> Function(Map<String, dynamic> row)? onEdit;
   final String Function(Map<String, dynamic> row)? subtitleOf;
 
   @override
@@ -753,7 +917,13 @@ class _NamedList extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             title: Text('${row['name']}'),
             subtitle: subtitleOf == null ? null : Text(subtitleOf!(row), maxLines: 2, overflow: TextOverflow.ellipsis),
-            trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => onDelete(row['id'] as String)),
+            trailing: Wrap(
+              children: [
+                if (onEdit != null)
+                  IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => onEdit!(row)),
+                IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => onDelete(row['id'] as String)),
+              ],
+            ),
           ),
         Align(
           alignment: Alignment.centerLeft,

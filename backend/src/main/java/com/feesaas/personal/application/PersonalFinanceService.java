@@ -70,6 +70,36 @@ public class PersonalFinanceService {
     }
 
     @PreAuthorize("hasPermission(null, 'personal.manage')")
+    @Transactional
+    public ExpenseRow updateExpense(
+            UUID id,
+            long amountMinor,
+            UUID categoryId,
+            String description,
+            LocalDate occurredOn,
+            String method) {
+        if (amountMinor <= 0) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Amount must be greater than zero.");
+        }
+        UUID ws = workspaceId();
+        LocalDate on = occurredOn == null ? LocalDate.now() : occurredOn;
+        if (repo.updateExpense(ws, id, categoryId, amountMinor, description, on, method) == 0) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "Expense not found.");
+        }
+        maybeBudgetAlerts(ws, categoryId, on);
+        return repo.findExpense(ws, id)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "Expense not found."));
+    }
+
+    @PreAuthorize("hasPermission(null, 'personal.manage')")
+    @Transactional
+    public void deleteExpense(UUID id) {
+        if (repo.deleteExpense(workspaceId(), id) == 0) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "Expense not found.");
+        }
+    }
+
+    @PreAuthorize("hasPermission(null, 'personal.manage')")
     @Transactional(readOnly = true)
     public List<ExpenseRow> expenses(YearMonth month) {
         LocalDate from = month.atDay(1);
@@ -91,6 +121,34 @@ public class PersonalFinanceService {
     }
 
     @PreAuthorize("hasPermission(null, 'personal.manage')")
+    @Transactional
+    public IncomeRow updateIncome(UUID id, long amountMinor, String source, String description, LocalDate occurredOn) {
+        if (amountMinor <= 0) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Amount must be greater than zero.");
+        }
+        UUID ws = workspaceId();
+        if (repo.updateIncome(
+                ws,
+                id,
+                amountMinor,
+                source == null || source.isBlank() ? "Other" : source.trim(),
+                description,
+                occurredOn == null ? LocalDate.now() : occurredOn) == 0) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "Income not found.");
+        }
+        return repo.findIncome(ws, id)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "Income not found."));
+    }
+
+    @PreAuthorize("hasPermission(null, 'personal.manage')")
+    @Transactional
+    public void deleteIncome(UUID id) {
+        if (repo.deleteIncome(workspaceId(), id) == 0) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "Income not found.");
+        }
+    }
+
+    @PreAuthorize("hasPermission(null, 'personal.manage')")
     @Transactional(readOnly = true)
     public List<IncomeRow> income(YearMonth month) {
         return repo.income(workspaceId(), month.atDay(1), month.atEndOfMonth());
@@ -105,6 +163,27 @@ public class PersonalFinanceService {
         String ym = yearMonth == null ? YearMonth.now().toString() : yearMonth;
         repo.upsertBudget(workspaceId(), categoryId, ym, limitMinor, "INR");
         return repo.budgets(workspaceId(), ym);
+    }
+
+    @PreAuthorize("hasPermission(null, 'personal.manage')")
+    @Transactional
+    public List<BudgetRow> updateBudget(UUID id, UUID categoryId, long limitMinor) {
+        if (limitMinor <= 0) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Budget amount must be greater than zero.");
+        }
+        UUID ws = workspaceId();
+        if (repo.updateBudget(ws, id, categoryId, limitMinor) == 0) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "Budget not found.");
+        }
+        return repo.budgets(ws, YearMonth.now().toString());
+    }
+
+    @PreAuthorize("hasPermission(null, 'personal.manage')")
+    @Transactional
+    public void deleteBudget(UUID id) {
+        if (repo.deleteBudget(workspaceId(), id) == 0) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "Budget not found.");
+        }
     }
 
     @PreAuthorize("hasPermission(null, 'personal.manage')")

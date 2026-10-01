@@ -1,11 +1,14 @@
 import 'package:feesaas_core/feesaas_core.dart';
+import 'package:feesaas_mobile/features/auth/workspace_switcher.dart';
 import 'package:feesaas_mobile/features/personal/add_expense_sheet.dart';
+import 'package:feesaas_mobile/features/personal/add_income_sheet.dart';
 import 'package:feesaas_mobile/util/money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final personalSummaryProvider = FutureProvider<PersonalSummary>((ref) {
-  return ref.watch(personalApiProvider).summary();
+final personalSummaryProvider = FutureProvider.autoDispose<PersonalSummary>((ref) {
+  ref.watch(workspaceClockProvider);
+  return ref.watch(personalApiProvider).summary(month: localYearMonth());
 });
 
 class PersonalDashboardScreen extends ConsumerWidget {
@@ -21,37 +24,12 @@ class PersonalDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text('$hello, ${config?.user.fullName.split(' ').first ?? ''}'),
         actions: [
+          const WorkspaceSwitcher(),
           IconButton(
             tooltip: 'Add income',
             onPressed: () async {
-              final amount = TextEditingController();
-              final source = TextEditingController(text: 'Salary');
-              await showDialog<void>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Add income'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(controller: amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Amount (₹)')),
-                      TextField(controller: source, decoration: const InputDecoration(labelText: 'Source')),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                    FilledButton(
-                      onPressed: () async {
-                        final rupee = double.tryParse(amount.text.trim());
-                        if (rupee == null) return;
-                        await ref.read(personalApiProvider).addIncome(amountMinor: (rupee * 100).round(), source: source.text.trim());
-                        ref.invalidate(personalSummaryProvider);
-                        if (ctx.mounted) Navigator.pop(ctx);
-                      },
-                      child: const Text('Save'),
-                    ),
-                  ],
-                ),
-              );
+              await showIncomeSheet(context, ref);
+              ref.invalidate(personalSummaryProvider);
             },
             icon: const Icon(Icons.south_west),
           ),

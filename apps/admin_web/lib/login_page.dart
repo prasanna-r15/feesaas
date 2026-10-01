@@ -1,6 +1,7 @@
 import 'package:feesaas_core/feesaas_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class AdminLoginPage extends ConsumerStatefulWidget {
   const AdminLoginPage({super.key});
@@ -67,6 +68,10 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
         FilledButton(
           onPressed: busy ? null : _submit,
           child: const Text('Sign in'),
+        ),
+        TextButton(
+          onPressed: busy ? null : () => context.go('/forgot'),
+          child: const Text('Forgot password?'),
         ),
       ],
     );

@@ -44,12 +44,22 @@ class BatchesScreen extends ConsumerWidget {
                   if (b.schedule != null && b.schedule!.isNotEmpty) b.schedule!,
                 ].join(' · ')),
                 onTap: () => context.push('/more/batches/${b.id}'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () async {
-                    await ref.read(attendanceApiProvider).deleteBatch(b.id);
-                    ref.invalidate(batchesProvider);
-                  },
+                trailing: Wrap(
+                  spacing: 0,
+                  children: [
+                    IconButton(
+                      tooltip: 'Add members',
+                      icon: const Icon(Icons.person_add_outlined),
+                      onPressed: () => _addMembers(context, ref, b.id),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () async {
+                        await ref.read(attendanceApiProvider).deleteBatch(b.id);
+                        ref.invalidate(batchesProvider);
+                      },
+                    ),
+                  ],
                 ),
               );
             },
@@ -62,11 +72,11 @@ class BatchesScreen extends ConsumerWidget {
   Future<void> _create(BuildContext context, WidgetRef ref) async {
     final name = TextEditingController();
     final schedule = TextEditingController();
-    final ok = await showDialog<bool>(
+    final ok = await showFsSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New batch'),
-        content: Column(
+      builder: (ctx) => FsSheetForm(
+        title: 'New batch',
+        body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),
@@ -89,6 +99,102 @@ class BatchesScreen extends ConsumerWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problemOf(e).detail)));
       }
+    }
+  }
+}
+
+Future<void> _addMembers(BuildContext context, WidgetRef ref, String batchId) async {
+  try {
+    final customers = await ref.read(customerApiProvider).list();
+    final existing = await ref.read(attendanceApiProvider).members(batchId);
+    if (!context.mounted) {
+      return;
+    }
+    if (customers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add gym members first, then attach them to this batch.')),
+      );
+      return;
+    }
+    final already = existing.map((m) => m.id).toSet();
+    final selected = <String>{};
+    final ok = await showFsSheet<bool>(
+      context: context,
+      builder: (ctx) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            final q = query.trim().toLowerCase();
+            final visible = customers.where((c) {
+              if (already.contains(c.id)) {
+                return false;
+              }
+              if (q.isEmpty) {
+                return true;
+              }
+              return c.fullName.toLowerCase().contains(q) || (c.phone ?? '').contains(q);
+            }).toList();
+            return SizedBox(
+              height: 420,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Add members to batch', style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search member'),
+                    onChanged: (v) => setLocal(() => query = v),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: visible.isEmpty
+                        ? const Center(child: Text('No members left to add.'))
+                        : ListView(
+                            children: [
+                              for (final c in visible)
+                                CheckboxListTile(
+                                  dense: true,
+                                  value: selected.contains(c.id),
+                                  title: Text(c.fullName),
+                                  subtitle: Text([c.customerCode, c.phone].whereType<String>().where((s) => s.isNotEmpty).join(' · ')),
+                                  onChanged: (on) => setLocal(() {
+                                    if (on == true) {
+                                      selected.add(c.id);
+                                    } else {
+                                      selected.remove(c.id);
+                                    }
+                                  }),
+                                ),
+                            ],
+                          ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                      FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Add (${selected.length})')),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (ok != true || selected.isEmpty) {
+      return;
+    }
+    for (final id in selected) {
+      await ref.read(attendanceApiProvider).addMember(batchId, id);
+    }
+    ref.invalidate(batchesProvider);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added ${selected.length} member(s).')));
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problemOf(e).detail)));
     }
   }
 }
@@ -147,7 +253,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         actions: [
           IconButton(
             tooltip: 'Add member',
-            onPressed: _addMember,
+            onPressed: () => _addMembers(context, ref, widget.batchId).then((_) {
+              if (mounted) {
+                _load();
+              }
+            }),
             icon: const Icon(Icons.person_add_outlined),
           ),
         ],
@@ -229,37 +339,6 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             markedOn: _on,
           );
       setState(() => _roster = roster);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problemOf(e).detail)));
-      }
-    }
-  }
-
-  Future<void> _addMember() async {
-    try {
-      final customers = await ref.read(customerApiProvider).list();
-      if (!mounted) {
-        return;
-      }
-      final id = await showDialog<String>(
-        context: context,
-        builder: (ctx) => SimpleDialog(
-          title: const Text('Add member'),
-          children: [
-            for (final c in customers)
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(ctx, c.id),
-                child: Text(c.fullName),
-              ),
-          ],
-        ),
-      );
-      if (id == null) {
-        return;
-      }
-      await ref.read(attendanceApiProvider).addMember(widget.batchId, id);
-      await _load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problemOf(e).detail)));

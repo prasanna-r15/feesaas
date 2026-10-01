@@ -25,8 +25,11 @@ public record ReportOverviewResponse(
         String extrasMonthLabel,
         String currency,
         List<PlanBreakdown> byPlan,
-        List<RecentPayment> recentPayments
+        List<RecentPayment> recentPayments,
+        List<Period> periods
 ) {
+    public record Period(int year, int month) {}
+
     public record PlanBreakdown(String name, long feeCount, long outstandingMinor, String outstandingLabel) {}
 
     public record RecentPayment(

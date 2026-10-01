@@ -55,7 +55,6 @@ class AuthInterceptor extends Interceptor {
       await _refreshOnce();
       final access = await _store.readAccess();
       if (access == null) {
-        _onSessionInvalid();
         handler.next(_map(err));
         return;
       }
@@ -64,11 +63,30 @@ class AuthInterceptor extends Interceptor {
       request.extra['retried'] = true;
       final clone = await _refreshDio.fetch(request);
       handler.resolve(clone);
-    } catch (_) {
+    } catch (e) {
+      if (_transient(e)) {
+        handler.next(_map(err));
+        return;
+      }
+      if (e is DioException && e.response?.statusCode != 401 && e.response?.statusCode != 403) {
+        handler.next(_map(err));
+        return;
+      }
       await _store.clearTokens();
       _onSessionInvalid();
       handler.next(_map(err));
     }
+  }
+
+  bool _transient(Object error) {
+    if (error is! DioException) {
+      return false;
+    }
+    return error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.sendTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.connectionError ||
+        error.response == null;
   }
 
   Future<void> _refreshOnce() async {
@@ -126,8 +144,16 @@ ApiProblem problemOf(Object error) {
     if (data is Map<String, dynamic>) {
       return ApiProblem.fromJson(error.response?.statusCode ?? 0, data);
     }
+    final status = error.response?.statusCode ?? 0;
+    if (status > 0) {
+      return ApiProblem(
+        status: status,
+        code: 'HTTP_$status',
+        detail: 'Request failed ($status). Try again.',
+      );
+    }
     return ApiProblem(
-      status: error.response?.statusCode ?? 0,
+      status: 0,
       code: 'NETWORK',
       detail: 'Could not reach the server. Check your connection.',
     );

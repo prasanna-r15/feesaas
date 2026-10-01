@@ -77,6 +77,7 @@ public class PaymentRepository {
                   from payments p
                   join customers c on c.id = p.customer_id
                   left join tenant_branches b on b.id = c.branch_id and b.tenant_id = c.tenant_id and b.deleted_at is null
+                 where p.tenant_id = app_tenant_id()
                  order by p.created_at desc
                  limit 500
                 """)
@@ -91,7 +92,7 @@ public class PaymentRepository {
                   from payments p
                   join customers c on c.id = p.customer_id
                   left join tenant_branches b on b.id = c.branch_id and b.tenant_id = c.tenant_id and b.deleted_at is null
-                 where p.id = :id
+                 where p.id = :id and p.tenant_id = app_tenant_id()
                 """)
                 .param("id", id)
                 .query(this::map)
@@ -105,7 +106,7 @@ public class PaymentRepository {
                        void_reason = :reason,
                        voided_at = now(),
                        voided_by = :by
-                 where id = :id and status = 'RECORDED'
+                 where id = :id and status = 'RECORDED' and tenant_id = app_tenant_id()
                 """)
                 .param("reason", reason)
                 .param("by", voidedBy)
@@ -133,6 +134,7 @@ public class PaymentRepository {
                   from payments p
                   join customers c on c.id = p.customer_id
                   left join tenant_branches b on b.id = c.branch_id and b.tenant_id = c.tenant_id and b.deleted_at is null
+                 where p.tenant_id = app_tenant_id()
                  order by p.paid_on desc, p.created_at desc
                 """)
                 .query(this::map)

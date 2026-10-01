@@ -222,11 +222,16 @@ class PlatformApi {
   }
 
   Future<List<Customer>> members(String id, {String? q}) async {
-    final response = await _dio.get<List<dynamic>>(
+    final response = await _dio.get<dynamic>(
       '/api/v1/platform/tenants/$id/members',
       queryParameters: {if (q != null && q.isNotEmpty) 'q': q},
     );
-    return (response.data ?? const []).map((e) => Customer.fromJson(e as Map<String, dynamic>)).toList();
+    final raw = response.data;
+    final list = raw is List ? raw : const [];
+    return list
+        .whereType<Map>()
+        .map((e) => Customer.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
   Future<PublicBranding> branding(String slug) async {
@@ -253,6 +258,59 @@ class PlatformApi {
 
   Future<List<Map<String, dynamic>>> deleteTenantBranch(String tenantId, String id) async {
     final response = await _dio.delete<List<dynamic>>('/api/v1/platform/tenants/$tenantId/branches/$id');
+    return (response.data ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> tenantFeePlans(String tenantId) =>
+      _maps('/api/v1/platform/tenants/$tenantId/fee-plans');
+
+  Future<List<Map<String, dynamic>>> createTenantFeePlan(
+    String tenantId, {
+    required String name,
+    required int amountMinor,
+    String billingCycle = 'MONTHLY',
+    int graceDays = 0,
+    bool isDefault = false,
+  }) async {
+    final response = await _dio.post<List<dynamic>>(
+      '/api/v1/platform/tenants/$tenantId/fee-plans',
+      data: jsonEncode({
+        'name': name,
+        'amountMinor': amountMinor,
+        'billingCycle': billingCycle,
+        'graceDays': graceDays,
+        'isDefault': isDefault,
+      }),
+      options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.json),
+    );
+    return (response.data ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> patchTenantFeePlan(
+    String tenantId,
+    String id, {
+    String? name,
+    int? amountMinor,
+    String? billingCycle,
+    int? graceDays,
+    bool? isDefault,
+  }) async {
+    final response = await _dio.patch<List<dynamic>>(
+      '/api/v1/platform/tenants/$tenantId/fee-plans/$id',
+      data: jsonEncode({
+        if (name != null) 'name': name,
+        if (amountMinor != null) 'amountMinor': amountMinor,
+        if (billingCycle != null) 'billingCycle': billingCycle,
+        if (graceDays != null) 'graceDays': graceDays,
+        if (isDefault != null) 'isDefault': isDefault,
+      }),
+      options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.json),
+    );
+    return (response.data ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> deleteTenantFeePlan(String tenantId, String id) async {
+    final response = await _dio.delete<List<dynamic>>('/api/v1/platform/tenants/$tenantId/fee-plans/$id');
     return (response.data ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
@@ -288,6 +346,28 @@ class PlatformApi {
       options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.json),
     );
     return (response.data ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> patchTenantDiet(
+    String tenantId,
+    String id, {
+    required String name,
+    required String body,
+  }) async {
+    final response = await _dio.patch<List<dynamic>>(
+      '/api/v1/platform/tenants/$tenantId/diet-charts/$id',
+      data: jsonEncode({'name': name, 'body': body}),
+      options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.json),
+    );
+    return (response.data ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<List<IndividualAccount>> listIndividuals({String? q}) async {
+    final response = await _dio.get<List<dynamic>>(
+      '/api/v1/platform/individuals',
+      queryParameters: {if (q != null && q.isNotEmpty) 'q': q},
+    );
+    return (response.data ?? const []).map((e) => IndividualAccount.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<List<Map<String, dynamic>>> deleteTenantDiet(String tenantId, String id) async {
@@ -383,6 +463,67 @@ class PlatformApi {
 
   Future<void> deleteConfig(String id) async {
     await _dio.delete<void>('/api/v1/platform/config/$id');
+  }
+
+  Future<List<JoinEnquiry>> listJoinEnquiries() async {
+    final response = await _dio.get<List<dynamic>>('/api/v1/platform/join-enquiries');
+    return (response.data ?? const []).map((e) => JoinEnquiry.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<({String tenantId, String name, String slug})> approveJoinEnquiry(
+    String enquiryId, {
+    required String name,
+    required String slug,
+    required String businessType,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/platform/join-enquiries/$enquiryId/approve',
+      data: jsonEncode({
+        'name': name,
+        'slug': slug,
+        'businessType': businessType,
+      }),
+      options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.json),
+    );
+    final data = response.data ?? const {};
+    return (
+      tenantId: data['tenantId']?.toString() ?? '',
+      name: data['name'] as String? ?? name,
+      slug: data['slug'] as String? ?? slug,
+    );
+  }
+
+  Future<List<SupportThread>> listSupportThreads() async {
+    final response = await _dio.get<List<dynamic>>('/api/v1/platform/support/threads');
+    return (response.data ?? const []).map((e) => SupportThread.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<SupportThread> openSupportThread(String userId) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/platform/support/threads',
+      data: jsonEncode({'userId': userId}),
+      options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.json),
+    );
+    return SupportThread.fromJson(response.data ?? const {});
+  }
+
+  Future<List<SupportMessage>> listSupportMessages(String threadId) async {
+    final response = await _dio.get<List<dynamic>>('/api/v1/platform/support/threads/$threadId/messages');
+    return (response.data ?? const []).map((e) => SupportMessage.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<SupportMessage> sendSupportReply(String threadId, String body) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/platform/support/threads/$threadId/messages',
+      data: jsonEncode({'body': body}),
+      options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.json),
+    );
+    return SupportMessage.fromJson(response.data ?? const {});
+  }
+
+  Future<int> supportUnread() async {
+    final response = await _dio.get<Map<String, dynamic>>('/api/v1/platform/support/unread');
+    return (response.data?['unreadCount'] as num?)?.toInt() ?? 0;
   }
 
   Future<List<Map<String, dynamic>>> _maps(String path) async {

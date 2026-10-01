@@ -1,6 +1,8 @@
 package com.feesaas.personal.infra;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import java.sql.Date;
+import java.sql.Types;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -61,6 +63,63 @@ public class PersonalFinanceRepository {
         return id;
     }
 
+    public Optional<ExpenseRow> findExpense(UUID workspaceId, UUID id) {
+        return jdbc.sql("""
+                select e.id, e.amount_minor, e.currency, e.description, e.occurred_on, e.method,
+                       c.id as category_id, c.name as category_name, c.color as category_color
+                  from personal_expenses e
+                  join personal_expense_categories c on c.id = e.category_id
+                 where e.workspace_id = :ws and e.id = :id
+                """)
+                .param("ws", workspaceId)
+                .param("id", id)
+                .query((rs, i) -> new ExpenseRow(
+                        rs.getObject("id", UUID.class),
+                        rs.getLong("amount_minor"),
+                        rs.getString("currency"),
+                        rs.getString("description"),
+                        rs.getObject("occurred_on", LocalDate.class),
+                        rs.getString("method"),
+                        rs.getObject("category_id", UUID.class),
+                        rs.getString("category_name"),
+                        rs.getString("category_color")))
+                .optional();
+    }
+
+    public int updateExpense(
+            UUID workspaceId,
+            UUID id,
+            UUID categoryId,
+            long amount,
+            String description,
+            LocalDate occurredOn,
+            String method) {
+        return jdbc.sql("""
+                update personal_expenses
+                   set category_id = :cat,
+                       amount_minor = :amt,
+                       description = :desc,
+                       occurred_on = :on,
+                       method = :method
+                 where id = :id and workspace_id = :ws
+                """)
+                .param("cat", categoryId)
+                .param("amt", amount)
+                .param("desc", description, Types.VARCHAR)
+                .param("on", Date.valueOf(occurredOn))
+                .param("method", method, Types.VARCHAR)
+                .param("id", id)
+                .param("ws", workspaceId)
+                .update();
+    }
+
+    public int deleteExpense(UUID workspaceId, UUID id) {
+        return jdbc.sql("delete from personal_expenses where id = :id and workspace_id = :ws")
+                .param("id", id)
+                .param("ws", workspaceId)
+                .update();
+    }
+
     public List<ExpenseRow> expenses(UUID workspaceId, LocalDate from, LocalDate to) {
         return jdbc.sql("""
                 select e.id, e.amount_minor, e.currency, e.description, e.occurred_on, e.method,
@@ -90,10 +149,65 @@ public class PersonalFinanceRepository {
                 insert into personal_income (id, workspace_id, amount_minor, currency, source, description, occurred_on, client_id)
                 values (:id, :ws, :amt, :cur, :source, :desc, :on, :client)
                 """)
-                .param("id", id).param("ws", workspaceId).param("amt", amount).param("cur", currency)
-                .param("source", source).param("desc", description).param("on", occurredOn).param("client", clientId)
+                .param("id", id)
+                .param("ws", workspaceId)
+                .param("amt", amount)
+                .param("cur", currency)
+                .param("source", source)
+                .param("desc", description, Types.VARCHAR)
+                .param("on", Date.valueOf(occurredOn))
+                .param("client", clientId)
                 .update();
         return id;
+    }
+
+    public Optional<IncomeRow> findIncome(UUID workspaceId, UUID id) {
+        return jdbc.sql("""
+                select id, amount_minor, currency, source, description, occurred_on
+                  from personal_income
+                 where workspace_id = :ws and id = :id
+                """)
+                .param("ws", workspaceId)
+                .param("id", id)
+                .query((rs, i) -> new IncomeRow(
+                        rs.getObject("id", UUID.class),
+                        rs.getLong("amount_minor"),
+                        rs.getString("currency"),
+                        rs.getString("source"),
+                        rs.getString("description"),
+                        rs.getObject("occurred_on", LocalDate.class)))
+                .optional();
+    }
+
+    public int updateIncome(
+            UUID workspaceId,
+            UUID id,
+            long amount,
+            String source,
+            String description,
+            LocalDate occurredOn) {
+        return jdbc.sql("""
+                update personal_income
+                   set amount_minor = :amt,
+                       source = :source,
+                       description = :desc,
+                       occurred_on = :on
+                 where id = :id and workspace_id = :ws
+                """)
+                .param("amt", amount)
+                .param("source", source)
+                .param("desc", description, Types.VARCHAR)
+                .param("on", Date.valueOf(occurredOn))
+                .param("id", id)
+                .param("ws", workspaceId)
+                .update();
+    }
+
+    public int deleteIncome(UUID workspaceId, UUID id) {
+        return jdbc.sql("delete from personal_income where id = :id and workspace_id = :ws")
+                .param("id", id)
+                .param("ws", workspaceId)
+                .update();
     }
 
     public List<IncomeRow> income(UUID workspaceId, LocalDate from, LocalDate to) {
@@ -134,6 +248,27 @@ public class PersonalFinanceRepository {
                 .param("ym", yearMonth).param("lim", limit).param("cur", currency)
                 .update();
         return id;
+    }
+
+    public int updateBudget(UUID workspaceId, UUID id, UUID categoryId, long limit) {
+        return jdbc.sql("""
+                update personal_budgets
+                   set category_id = :cat,
+                       limit_minor = :lim
+                 where id = :id and workspace_id = :ws
+                """)
+                .param("cat", categoryId)
+                .param("lim", limit)
+                .param("id", id)
+                .param("ws", workspaceId)
+                .update();
+    }
+
+    public int deleteBudget(UUID workspaceId, UUID id) {
+        return jdbc.sql("delete from personal_budgets where id = :id and workspace_id = :ws")
+                .param("id", id)
+                .param("ws", workspaceId)
+                .update();
     }
 
     public List<BudgetRow> budgets(UUID workspaceId, String yearMonth) {

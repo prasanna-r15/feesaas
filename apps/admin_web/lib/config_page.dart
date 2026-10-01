@@ -1,3 +1,4 @@
+import 'package:feesaas_admin_web/admin_app_bar.dart';
 import 'package:feesaas_core/feesaas_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,8 +29,8 @@ class _ConfigPageState extends ConsumerState<ConfigPage> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(platformConfigProvider);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Config')),
+    return AdminScaffold(
+      title: 'Config',
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _edit(null),
         icon: const Icon(Icons.add),

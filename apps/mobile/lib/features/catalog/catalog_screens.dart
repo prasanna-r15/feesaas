@@ -75,11 +75,11 @@ class BranchesScreen extends ConsumerWidget {
   Future<void> _addBranch(BuildContext context, WidgetRef ref) async {
     final name = TextEditingController();
     final address = TextEditingController();
-    final ok = await showDialog<bool>(
+    final ok = await showFsSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New location'),
-        content: Column(
+      builder: (ctx) => FsSheetForm(
+        title: 'New location',
+        body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Name (e.g. Karamadai)')),
@@ -183,11 +183,11 @@ class AddonsScreen extends ConsumerWidget {
   Future<void> _addProduct(BuildContext context, WidgetRef ref) async {
     final name = TextEditingController();
     final rupees = TextEditingController();
-    final ok = await showDialog<bool>(
+    final ok = await showFsSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New extra'),
-        content: Column(
+      builder: (ctx) => FsSheetForm(
+        title: 'New extra',
+        body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Name (e.g. Protein)')),
@@ -217,11 +217,11 @@ class AddonsScreen extends ConsumerWidget {
       return;
     }
     String? memberId = members.first.id;
-    final ok = await showDialog<bool>(
+    final ok = await showFsSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Collect ${product.name}'),
-        content: DropdownButtonFormField<String>(
+      builder: (ctx) => FsSheetForm(
+        title: 'Collect ${product.name}',
+        body: DropdownButtonFormField<String>(
           value: memberId,
           items: [for (final m in members) DropdownMenuItem(value: m.id, child: Text(m.fullName))],
           onChanged: (v) => memberId = v,
@@ -255,7 +255,7 @@ class DietChartsScreen extends ConsumerWidget {
       floatingActionButton: PermissionGate(
         permission: 'settings.manage',
         child: FloatingActionButton.extended(
-          onPressed: () => _add(context, ref),
+          onPressed: () => _edit(context, ref, null),
           label: const Text('New chart'),
           icon: const Icon(Icons.add),
         ),
@@ -287,10 +287,27 @@ class DietChartsScreen extends ConsumerWidget {
                       DietDocumentView(html: d.body, maxLines: 6),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () => _send(context, ref, d),
-                          icon: const Icon(Icons.chat_outlined),
-                          label: const Text('WhatsApp'),
+                        child: Wrap(
+                          children: [
+                            TextButton.icon(
+                              onPressed: () => _edit(context, ref, d),
+                              icon: const Icon(Icons.edit_outlined),
+                              label: const Text('Edit'),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _send(context, ref, d),
+                              icon: const Icon(Icons.chat_outlined),
+                              label: const Text('WhatsApp'),
+                            ),
+                            IconButton(
+                              tooltip: 'Delete',
+                              onPressed: () async {
+                                await ref.read(catalogApiProvider).deleteDiet(d.id);
+                                ref.invalidate(dietListProvider);
+                              },
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -304,25 +321,20 @@ class DietChartsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _add(BuildContext context, WidgetRef ref) async {
-    final name = TextEditingController();
-    final body = TextEditingController();
-    final ok = await showDialog<bool>(
+  Future<void> _edit(BuildContext context, WidgetRef ref, DietChart? existing) async {
+    final name = TextEditingController(text: existing?.name ?? '');
+    final body = TextEditingController(text: existing?.body ?? '');
+    final ok = await showFsSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Diet chart'),
-        content: SizedBox(
-          width: 520,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: name, decoration: const InputDecoration(labelText: 'Name (e.g. Fat loss week 1)')),
-                const SizedBox(height: 12),
-                DietEditor(controller: body),
-              ],
-            ),
-          ),
+      builder: (ctx) => FsSheetForm(
+        title: existing == null ? 'Diet chart' : 'Edit diet chart',
+        body: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: name, decoration: const InputDecoration(labelText: 'Name (e.g. Fat loss week 1)')),
+            const SizedBox(height: 12),
+            DietEditor(controller: body),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -331,7 +343,11 @@ class DietChartsScreen extends ConsumerWidget {
       ),
     );
     if (ok == true && name.text.trim().isNotEmpty && body.text.trim().isNotEmpty) {
-      await ref.read(catalogApiProvider).createDiet(name: name.text.trim(), body: body.text.trim());
+      if (existing == null) {
+        await ref.read(catalogApiProvider).createDiet(name: name.text.trim(), body: body.text.trim());
+      } else {
+        await ref.read(catalogApiProvider).patchDiet(existing.id, name: name.text.trim(), body: body.text.trim());
+      }
       ref.invalidate(dietListProvider);
     }
   }
@@ -347,67 +363,62 @@ class DietChartsScreen extends ConsumerWidget {
     }
     String? branchId;
     final selected = <String>{};
-    final ok = await showDialog<bool>(
+    final ok = await showFsSheet<bool>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
             final visible = members.where((m) => branchId == null || m.branchId == branchId).toList();
-            return AlertDialog(
-              title: Text('Send ${chart.name}'),
-              content: SizedBox(
-                width: 420,
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            return FsSheetForm(
+              title: 'Send ${chart.name}',
+              body: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (branches.isNotEmpty) ...[
+                    LocationPickerField(
+                      branches: branches,
+                      value: branchId,
+                      allLabel: 'Any location',
+                      onChanged: (id) => setLocal(() {
+                        branchId = id;
+                        if (id != null) {
+                          selected
+                            ..clear()
+                            ..addAll(members.where((m) => m.branchId == id).map((m) => m.id));
+                        }
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Row(
                     children: [
-                      if (branches.isNotEmpty) ...[
-                        LocationPickerField(
-                          branches: branches,
-                          value: branchId,
-                          allLabel: 'Any location',
-                          onChanged: (id) => setLocal(() {
-                            branchId = id;
-                            if (id != null) {
-                              selected
-                                ..clear()
-                                ..addAll(members.where((m) => m.branchId == id).map((m) => m.id));
-                            }
-                          }),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      Row(
-                        children: [
-                          Text('Members (${selected.length})'),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () => setLocal(() {
-                              selected
-                                ..clear()
-                                ..addAll(visible.map((m) => m.id));
-                            }),
-                            child: const Text('Select all shown'),
-                          ),
-                        ],
+                      Text('Members (${selected.length})'),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => setLocal(() {
+                          selected
+                            ..clear()
+                            ..addAll(visible.map((m) => m.id));
+                        }),
+                        child: const Text('Select all shown'),
                       ),
-                      for (final m in visible)
-                        CheckboxListTile(
-                          dense: true,
-                          value: selected.contains(m.id),
-                          title: Text(m.fullName),
-                          subtitle: Text([m.branchName, m.phone].whereType<String>().where((s) => s.isNotEmpty).join(' · ')),
-                          onChanged: (on) => setLocal(() {
-                            if (on == true) {
-                              selected.add(m.id);
-                            } else {
-                              selected.remove(m.id);
-                            }
-                          }),
-                        ),
                     ],
                   ),
-                ),
+                  for (final m in visible)
+                    CheckboxListTile(
+                      dense: true,
+                      value: selected.contains(m.id),
+                      title: Text(m.fullName),
+                      subtitle: Text([m.branchName, m.phone].whereType<String>().where((s) => s.isNotEmpty).join(' · ')),
+                      onChanged: (on) => setLocal(() {
+                        if (on == true) {
+                          selected.add(m.id);
+                        } else {
+                          selected.remove(m.id);
+                        }
+                      }),
+                    ),
+                ],
               ),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),

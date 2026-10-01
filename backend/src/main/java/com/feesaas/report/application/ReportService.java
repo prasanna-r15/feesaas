@@ -21,9 +21,27 @@ public class ReportService {
 
     @PreAuthorize("hasPermission(null, 'reports.view')")
     @Transactional(readOnly = true)
-    public OverviewView overview() {
+    public OverviewView overview(Integer year, Integer month, LocalDate paidOn) {
         TenantContext.requireTenantId();
-        var row = reports.overview();
+        LocalDate today = LocalDate.now();
+        LocalDate monthStart;
+        LocalDate monthEnd;
+        if (year != null && month != null) {
+            if (month < 1 || month > 12) {
+                throw new com.feesaas.shared.error.ApiException(
+                        com.feesaas.shared.error.ErrorCode.VALIDATION_FAILED, "Month must be 1–12.");
+            }
+            monthStart = LocalDate.of(year, month, 1);
+            monthEnd = monthStart.plusMonths(1);
+        } else {
+            LocalDate base = paidOn == null ? today : paidOn;
+            monthStart = base.withDayOfMonth(1);
+            monthEnd = monthStart.plusMonths(1);
+        }
+        LocalDate day = paidOn == null ? today : paidOn;
+        LocalDate listFrom = paidOn != null ? null : (year != null && month != null ? monthStart : null);
+        LocalDate listTo = paidOn != null ? null : (year != null && month != null ? monthEnd : null);
+        var row = reports.overview(day, monthStart, monthEnd);
         String currency = "INR";
         long collectedToday = row.feesTodayMinor() + row.extrasTodayMinor();
         long collectedMonth = row.feesMonthMinor() + row.extrasMonthMinor();
@@ -55,7 +73,7 @@ public class ReportService {
                                 p.outstandingMinor(),
                                 FeeService.formatMoney(p.outstandingMinor(), currency)))
                         .toList(),
-                reports.recentPayments().stream()
+                reports.recentPayments(paidOn, listFrom, listTo).stream()
                         .map(p -> new RecentPaymentView(
                                 p.receiptNo(),
                                 p.customerName(),
@@ -66,6 +84,9 @@ public class ReportService {
                                 p.source(),
                                 p.category() == null ? "" : p.category(),
                                 p.branchName() == null ? "" : p.branchName()))
+                        .toList(),
+                reports.collectionPeriods().stream()
+                        .map(p -> new PeriodView(p.year(), p.month()))
                         .toList());
     }
 
@@ -130,8 +151,11 @@ public class ReportService {
             String extrasMonthLabel,
             String currency,
             List<PlanBreakdownView> byPlan,
-            List<RecentPaymentView> recentPayments
+            List<RecentPaymentView> recentPayments,
+            List<PeriodView> periods
     ) {}
+
+    public record PeriodView(int year, int month) {}
 
     public record PlanBreakdownView(String name, long feeCount, long outstandingMinor, String outstandingLabel) {}
 

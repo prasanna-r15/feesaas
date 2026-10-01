@@ -2,6 +2,7 @@ package com.feesaas.tenant.application;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.feesaas.auth.infra.IdentityRepository;
 import com.feesaas.configuration.infra.PresetRepository;
 import com.feesaas.shared.error.ApiException;
 import com.feesaas.shared.error.ErrorCode;
@@ -10,6 +11,7 @@ import com.feesaas.shared.tenancy.TenantScope;
 import com.feesaas.tenant.infra.TenantRepository;
 import com.feesaas.tenant.infra.TenantRepository.TenantRow;
 import com.feesaas.user.application.OwnerProvisioner;
+import com.feesaas.user.infra.StaffRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -24,6 +26,8 @@ public class TenantService {
     private final TenantRepository tenants;
     private final PresetRepository presets;
     private final OwnerProvisioner owners;
+    private final StaffRepository staff;
+    private final IdentityRepository identity;
     private final PasswordEncoder passwords;
     private final TenantExecutor executor;
     private final ObjectMapper json;
@@ -32,12 +36,16 @@ public class TenantService {
             TenantRepository tenants,
             PresetRepository presets,
             OwnerProvisioner owners,
+            StaffRepository staff,
+            IdentityRepository identity,
             PasswordEncoder passwords,
             TenantExecutor executor,
             ObjectMapper json) {
         this.tenants = tenants;
         this.presets = presets;
         this.owners = owners;
+        this.staff = staff;
+        this.identity = identity;
         this.passwords = passwords;
         this.executor = executor;
         this.json = json;
@@ -67,6 +75,42 @@ public class TenantService {
             UUID ownerId = owners.createOwner(
                     tenantId, cmd.ownerEmail(), cmd.ownerPhone(), cmd.ownerFullName(),
                     passwords.encode(cmd.ownerPassword()));
+            TenantRow row = tenants.findById(tenantId).orElseThrow();
+            return toView(row, modules);
+        });
+    }
+
+    @PreAuthorize("hasPermission(null, 'platform.tenants.manage')")
+    public TenantView createForExistingOwner(UUID ownerUserId, String name, String slug, String businessType, String timezone, String currency) {
+        if (ownerUserId == null) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Owner is required.");
+        }
+        String type = businessType == null ? "" : businessType.trim().toUpperCase();
+        var preset = presets.findByCode(type)
+                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown business type."));
+        List<String> modules = readModules(preset.modulesJson());
+        String tz = timezone == null || timezone.isBlank() ? "Asia/Kolkata" : timezone.trim();
+        String cur = currency == null || currency.isBlank() ? "INR" : currency.trim().toUpperCase();
+        String tenantName = name == null ? "" : name.trim();
+        if (tenantName.isBlank()) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Business name is required.");
+        }
+        String normalizedSlug = TenantSlugs.normalize(slug == null || slug.isBlank() ? tenantName : slug);
+        return executor.call(TenantScope.platformAdmin(), () -> {
+            UUID tenantId;
+            try {
+                tenantId = tenants.insert(tenantName, normalizedSlug, type, tz, cur);
+            } catch (DataIntegrityViolationException e) {
+                throw new ApiException(ErrorCode.CONFLICT, "Slug is already in use.");
+            }
+            tenants.insertSettings(tenantId, preset.labelsJson());
+            for (String module : modules) {
+                tenants.insertModule(tenantId, module);
+            }
+            if (staff.convertIndividualToRole(ownerUserId, tenantId, null, "BUSINESS_OWNER") == 0) {
+                throw new ApiException(ErrorCode.CONFLICT, "This person already owns or belongs to a gym.");
+            }
+            identity.provisionHats(ownerUserId, tenantId, "BUSINESS_OWNER");
             TenantRow row = tenants.findById(tenantId).orElseThrow();
             return toView(row, modules);
         });

@@ -18,8 +18,10 @@ import 'package:feesaas_mobile/features/payments/payments_screen.dart';
 import 'package:feesaas_mobile/features/personal/personal_budgets_screen.dart';
 import 'package:feesaas_mobile/features/personal/personal_dashboard_screen.dart';
 import 'package:feesaas_mobile/features/personal/personal_expenses_screen.dart';
+import 'package:feesaas_mobile/features/personal/business_enquiry_sheet.dart';
 import 'package:feesaas_mobile/features/personal/personal_profile_screen.dart';
 import 'package:feesaas_mobile/features/personal/personal_shell.dart';
+import 'package:feesaas_mobile/features/personal/support_chat_screen.dart';
 import 'package:feesaas_mobile/features/platform/dues_mail_settings_screen.dart';
 import 'package:feesaas_mobile/features/platform/gyms_screen.dart';
 import 'package:feesaas_mobile/features/pending_fees/pending_fees_screen.dart';
@@ -38,7 +40,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final session = ref.read(sessionControllerProvider);
       final loc = state.matchedLocation;
-      final loggingIn = loc == '/login' || loc == '/signup';
+      final loggingIn = loc == '/login' || loc == '/signup' || loc == '/forgot';
       final next = state.uri.queryParameters['next'];
       final inviteNext = (next != null && next.startsWith('/group/invite/')) ? next : null;
       return switch (session.status) {
@@ -56,10 +58,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             if (config.needsOnboarding && loc != '/onboarding') {
               return '/onboarding';
             }
-            if (config.isPersonal && (loc == '/pending' || loc.startsWith('/customers') || loc == '/reports')) {
+            if (config.isPersonal && loc != '/onboarding' && !loc.startsWith('/personal') && !loc.startsWith('/groups') && !loc.startsWith('/group/invite')) {
               return '/personal';
             }
-            if (!config.isPersonal && !config.isPlatform && loc.startsWith('/personal')) {
+            if (!config.isPersonal && !config.isPlatform && (loc.startsWith('/personal') || loc.startsWith('/groups'))) {
               return '/pending';
             }
             return null;
@@ -69,6 +71,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/login', builder: (c, s) => const LoginScreen()),
       GoRoute(path: '/signup', builder: (c, s) => const SignupScreen()),
+      GoRoute(path: '/forgot', builder: (c, s) => const ForgotPasswordScreen()),
       GoRoute(path: '/onboarding', builder: (c, s) => const OnboardingScreen()),
       GoRoute(path: '/suspended', builder: (c, s) => const SuspendedScreen()),
       GoRoute(path: '/group/invite/:token', builder: (c, s) => GroupInviteScreen(token: s.pathParameters['token']!)),
@@ -101,7 +104,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ],
             ),
           ]),
-          StatefulShellBranch(routes: [GoRoute(path: '/personal/profile', builder: (c, s) => const PersonalProfileScreen())]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/personal/profile',
+              builder: (c, s) => const PersonalProfileScreen(),
+              routes: [
+                GoRoute(path: 'enquiry', builder: (c, s) => const BusinessEnquiryScreen()),
+                GoRoute(path: 'support', builder: (c, s) => const SupportChatScreen()),
+              ],
+            ),
+          ]),
         ],
       ),
       StatefulShellRoute.indexedStack(
@@ -136,6 +148,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 GoRoute(path: 'diet-charts', builder: (c, s) => const DietChartsScreen()),
                 GoRoute(path: 'gyms', builder: (c, s) => const GymsScreen()),
                 GoRoute(path: 'mail', builder: (c, s) => const DuesMailSettingsScreen()),
+                GoRoute(path: 'support', builder: (c, s) => const SupportChatScreen()),
               ],
             ),
           ]),
@@ -162,6 +175,7 @@ class AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(tenantConfigProvider);
+    final unread = ref.watch(mySupportUnreadProvider);
     final customersLabel = config?.label('customer.plural', 'Customers') ?? 'Customers';
     final destinations = <_Dest>[
       const _Dest(label: 'Pending', icon: Icons.payments_outlined, module: null, permission: 'fees.view'),
@@ -191,7 +205,12 @@ class AppShell extends ConsumerWidget {
     }
     final barDestinations = [
       for (final i in visible)
-        NavigationDestination(icon: Icon(destinations[i].icon), label: destinations[i].label),
+        NavigationDestination(
+          icon: i == 3
+              ? FsUnreadBadge(count: unread, child: Icon(destinations[i].icon))
+              : Icon(destinations[i].icon),
+          label: destinations[i].label,
+        ),
     ];
     return Scaffold(
       body: navigationShell,

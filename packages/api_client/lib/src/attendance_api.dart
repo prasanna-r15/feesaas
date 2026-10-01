@@ -23,7 +23,7 @@ class AttendanceApi {
   }
 
   Future<void> deleteBatch(String id) async {
-    await _dio.delete<void>('/api/v1/batches/$id');
+    await _dio.delete<String>('/api/v1/batches/$id', options: Options(responseType: ResponseType.plain));
   }
 
   Future<List<AttendanceMember>> members(String batchId) async {
@@ -32,15 +32,18 @@ class AttendanceApi {
   }
 
   Future<void> addMember(String batchId, String customerId) async {
-    await _dio.post<void>(
+    await _dio.post<String>(
       '/api/v1/batches/$batchId/members',
       data: jsonEncode({'customerId': customerId}),
-      options: Options(contentType: Headers.jsonContentType),
+      options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.plain),
     );
   }
 
   Future<void> removeMember(String batchId, String customerId) async {
-    await _dio.delete<void>('/api/v1/batches/$batchId/members/$customerId');
+    await _dio.delete<String>(
+      '/api/v1/batches/$batchId/members/$customerId',
+      options: Options(responseType: ResponseType.plain),
+    );
   }
 
   Future<AttendanceRoster> roster({required String batchId, String? on}) async {

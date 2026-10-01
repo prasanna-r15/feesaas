@@ -57,6 +57,13 @@ class CatalogApi {
     return _postList('/api/v1/diet-charts', {'name': name, 'body': body}, DietChart.fromJson);
   }
 
+  Future<List<DietChart>> patchDiet(String id, {String? name, String? body}) {
+    return _patchList('/api/v1/diet-charts/$id', {
+      if (name != null) 'name': name,
+      if (body != null) 'body': body,
+    }, DietChart.fromJson);
+  }
+
   Future<List<DietChart>> deleteDiet(String id) => _deleteList('/api/v1/diet-charts/$id', DietChart.fromJson);
 
   Future<List<RemindPayload>> sendDiet({
@@ -83,6 +90,15 @@ class CatalogApi {
 
   Future<List<T>> _postList<T>(String path, Map<String, Object?> data, T Function(Map<String, dynamic>) parse) async {
     final response = await _dio.post<List<dynamic>>(
+      path,
+      data: jsonEncode(data),
+      options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.json),
+    );
+    return (response.data ?? const []).map((e) => parse(Map<String, dynamic>.from(e as Map))).toList();
+  }
+
+  Future<List<T>> _patchList<T>(String path, Map<String, Object?> data, T Function(Map<String, dynamic>) parse) async {
+    final response = await _dio.patch<List<dynamic>>(
       path,
       data: jsonEncode(data),
       options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.json),

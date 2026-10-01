@@ -61,41 +61,61 @@ public class CustomerFeePlanRepository {
         return id;
     }
 
-    public List<CustomerDue> customersNeedingEnrollment() {
+    public List<CustomerDue> customersNeedingEnrollment(UUID tenantId) {
         return jdbc.sql("""
                 select c.id, coalesce(c.due_date, current_date + 14) as due_date
                   from customers c
-                 where c.deleted_at is null
+                 where c.tenant_id = :tenantId
+                   and c.deleted_at is null
                    and c.status = 'ACTIVE'
                    and not exists (
                         select 1 from customer_fee_plans p
-                         where p.customer_id = c.id and p.status = 'ACTIVE'
+                         where p.customer_id = c.id
+                           and p.tenant_id = c.tenant_id
+                           and p.status = 'ACTIVE'
                    )
                 """)
+                .param("tenantId", tenantId)
                 .query((rs, i) -> new CustomerDue(
                         rs.getObject("id", UUID.class),
                         rs.getDate("due_date").toLocalDate()))
                 .list();
     }
 
-    public List<CustomerDue> customersNeedingCurrentFee() {
+    public List<CustomerDue> customersNeedingCurrentFee(UUID tenantId) {
         return jdbc.sql("""
                 select c.id, coalesce(c.due_date, current_date + 14) as due_date
                   from customers c
-                  join customer_fee_plans p on p.customer_id = c.id and p.status = 'ACTIVE'
-                 where c.deleted_at is null
+                  join customer_fee_plans p
+                    on p.customer_id = c.id and p.tenant_id = c.tenant_id and p.status = 'ACTIVE'
+                 where c.tenant_id = :tenantId
+                   and c.deleted_at is null
                    and c.status = 'ACTIVE'
                    and not exists (
                         select 1 from fees f
                          where f.customer_fee_plan_id = p.id
+                           and f.tenant_id = c.tenant_id
                            and f.deleted_at is null
                            and f.status in ('PENDING','PARTIALLY_PAID')
                    )
                 """)
+                .param("tenantId", tenantId)
                 .query((rs, i) -> new CustomerDue(
                         rs.getObject("id", UUID.class),
                         rs.getDate("due_date").toLocalDate()))
                 .list();
+    }
+
+    public boolean customerInTenant(UUID tenantId, UUID customerId) {
+        return jdbc.sql("""
+                select 1 from customers
+                 where id = :customerId and tenant_id = :tenantId and deleted_at is null
+                """)
+                .param("customerId", customerId)
+                .param("tenantId", tenantId)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
     }
 
     public record CustomerDue(UUID customerId, LocalDate dueDate) {}

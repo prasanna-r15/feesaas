@@ -13,7 +13,6 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -58,46 +57,27 @@ public class DemoDataSeeder implements ApplicationRunner {
     }
 
     private void seed() {
-        try {
-            seedGymOwner();
-            seedPlatformAdmin();
-        } catch (DataIntegrityViolationException e) {
-            log.warn("Demo seed skipped because a unique value already exists: {}", e.getMostSpecificCause().getMessage());
+        seedPlatformAdmin();
+        if (demoGymExists()) {
+            log.info("Demo gym already exists; skipping seed.");
+            return;
         }
-
-        jdbc.sql("select id from tenants where slug = 'demo-gym'")
-                .query(UUID.class)
-                .optional()
-                .ifPresent(id -> {
-                    try {
-                        jdbc.sql("""
-                                update tenant_settings
-                                   set phone = coalesce(phone, :phone),
-                                       whatsapp_number = coalesce(whatsapp_number, :phone)
-                                 where tenant_id = :id
-                                """)
-                                .param("id", id)
-                                .param("phone", OWNER_PHONE)
-                                .update();
-                        jdbc.sql("""
-                                insert into tenant_modules (tenant_id, module_code, enabled)
-                                values (:id, 'ATTENDANCE', true)
-                                on conflict (tenant_id, module_code) do update set enabled = true
-                                """)
-                                .param("id", id)
-                                .update();
-                        tenants.run(TenantScope.tenant(id), () -> seedDemoCustomers(id));
-                    } catch (RuntimeException e) {
-                        log.warn("Demo gym extras skipped: {}", e.getMessage());
-                    }
-                });
+        if (ownerContactTaken()) {
+            log.info("Demo owner email or phone already exists; skipping demo gym seed.");
+            return;
+        }
+        UUID tenantId = createDemoGym();
+        seedDemoCustomers(tenantId);
     }
 
-    private void seedGymOwner() {
-        boolean gymExists = jdbc.sql("select count(*) from tenants where slug = 'demo-gym'")
+    private boolean demoGymExists() {
+        return jdbc.sql("select count(*) from tenants where slug = 'demo-gym'")
                 .query(Long.class)
                 .single() > 0;
-        boolean ownerTaken = jdbc.sql("""
+    }
+
+    private boolean ownerContactTaken() {
+        return jdbc.sql("""
                 select count(*) from users
                  where lower(email) = lower(:email) or phone = :phone
                 """)
@@ -105,9 +85,9 @@ public class DemoDataSeeder implements ApplicationRunner {
                 .param("phone", OWNER_PHONE)
                 .query(Long.class)
                 .single() > 0;
-        if (gymExists || ownerTaken) {
-            return;
-        }
+    }
+
+    private UUID createDemoGym() {
         var preset = presets.findByCode("GYM").orElseThrow();
         UUID tenantId = tenantRepository.insert(
                 "Demo Gym", "demo-gym", "GYM", "Asia/Kolkata", "INR");
@@ -121,9 +101,19 @@ public class DemoDataSeeder implements ApplicationRunner {
         jdbc.sql("update tenants set status = 'ACTIVE' where id = :id")
                 .param("id", tenantId)
                 .update();
+        jdbc.sql("""
+                update tenant_settings
+                   set phone = coalesce(phone, :phone),
+                       whatsapp_number = coalesce(whatsapp_number, :phone)
+                 where tenant_id = :id
+                """)
+                .param("id", tenantId)
+                .param("phone", OWNER_PHONE)
+                .update();
         owners.createOwner(
                 tenantId, OWNER_EMAIL, OWNER_PHONE, "Demo Owner", passwords.encode(DEMO_PASSWORD));
         log.info("Seeded demo owner {} / {}", OWNER_EMAIL, DEMO_PASSWORD);
+        return tenantId;
     }
 
     private void seedPlatformAdmin() {
@@ -132,6 +122,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                 .query(Long.class)
                 .single() > 0;
         if (hasAdmin) {
+            log.info("Platform admin already exists; skipping seed.");
             return;
         }
         jdbc.sql("""
@@ -146,12 +137,15 @@ public class DemoDataSeeder implements ApplicationRunner {
     }
 
     private void seedDemoCustomers(UUID tenantId) {
-        jdbc.sql("update customers set due_date = current_date + 14 where due_date is null and deleted_at is null")
-                .update();
-        boolean any = jdbc.sql("select count(*) from customers where deleted_at is null")
+        Long existing = jdbc.sql("""
+                select count(*) from customers
+                 where tenant_id = :id and deleted_at is null
+                """)
+                .param("id", tenantId)
                 .query(Long.class)
-                .single() > 0;
-        if (any) {
+                .single();
+        if (existing != null && existing > 0) {
+            log.info("Demo gym already has members; skipping customer seed.");
             return;
         }
         insertCustomer(tenantId, "Rahul Sharma", "+919876543210", "rahul@demo.local", java.time.LocalDate.now().plusDays(7), true);

@@ -22,7 +22,7 @@ public class CustomerRepository {
     }
 
     public long countActive() {
-        return jdbc.sql("select count(*) from customers where deleted_at is null")
+        return jdbc.sql("select count(*) from customers where deleted_at is null and tenant_id = app_tenant_id()")
                 .query(Long.class)
                 .single();
     }
@@ -80,6 +80,7 @@ public class CustomerRepository {
                   left join fee_plans p on p.id = cfp.fee_plan_id
                   left join tenant_branches b on b.id = c.branch_id and b.tenant_id = c.tenant_id and b.deleted_at is null
                  where c.deleted_at is null
+                   and c.tenant_id = app_tenant_id()
                    and (:status = '' or c.status = :status)
                    and (:branchId::uuid is null or c.branch_id = :branchId)
                    and (
@@ -109,7 +110,7 @@ public class CustomerRepository {
                     on cfp.customer_id = c.id and cfp.tenant_id = c.tenant_id and cfp.status = 'ACTIVE'
                   left join fee_plans p on p.id = cfp.fee_plan_id
                   left join tenant_branches b on b.id = c.branch_id and b.tenant_id = c.tenant_id and b.deleted_at is null
-                 where c.id = :id and c.deleted_at is null
+                 where c.id = :id and c.deleted_at is null and c.tenant_id = app_tenant_id()
                 """)
                 .param("id", id)
                 .query(this::map)
@@ -123,7 +124,7 @@ public class CustomerRepository {
         if (excludingId == null) {
             return jdbc.sql("""
                     select count(*) from customers
-                     where phone = :phone and deleted_at is null
+                     where phone = :phone and deleted_at is null and tenant_id = app_tenant_id()
                     """)
                     .param("phone", phone, Types.VARCHAR)
                     .query(Long.class)
@@ -131,7 +132,7 @@ public class CustomerRepository {
         }
         return jdbc.sql("""
                 select count(*) from customers
-                 where phone = :phone and deleted_at is null and id <> :id
+                 where phone = :phone and deleted_at is null and id <> :id and tenant_id = app_tenant_id()
                 """)
                 .param("phone", phone, Types.VARCHAR)
                 .param("id", excludingId)
@@ -146,7 +147,7 @@ public class CustomerRepository {
         if (excludingId == null) {
             return jdbc.sql("""
                     select count(*) from customers
-                     where lower(email) = lower(:email) and deleted_at is null
+                     where lower(email) = lower(:email) and deleted_at is null and tenant_id = app_tenant_id()
                     """)
                     .param("email", email, Types.VARCHAR)
                     .query(Long.class)
@@ -154,7 +155,7 @@ public class CustomerRepository {
         }
         return jdbc.sql("""
                 select count(*) from customers
-                 where lower(email) = lower(:email) and deleted_at is null and id <> :id
+                 where lower(email) = lower(:email) and deleted_at is null and id <> :id and tenant_id = app_tenant_id()
                 """)
                 .param("email", email, Types.VARCHAR)
                 .param("id", excludingId)

@@ -9,12 +9,18 @@ import jakarta.validation.Valid;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -49,6 +55,19 @@ public class PersonalFinanceController {
                 request.occurredOn(), request.method(), request.clientId());
     }
 
+    @PatchMapping("/expenses/{id}")
+    public Object updateExpense(@PathVariable UUID id, @Valid @RequestBody CreateExpenseRequest request) {
+        return personal.updateExpense(
+                id, request.amountMinor(), request.categoryId(), request.description(),
+                request.occurredOn(), request.method());
+    }
+
+    @DeleteMapping("/expenses/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteExpense(@PathVariable UUID id) {
+        personal.deleteExpense(id);
+    }
+
     @GetMapping("/income")
     public List<?> income(@RequestParam(required = false) String month) {
         return personal.income(parseMonth(month));
@@ -60,6 +79,18 @@ public class PersonalFinanceController {
                 request.amountMinor(), request.source(), request.description(), request.occurredOn(), request.clientId());
     }
 
+    @PatchMapping("/income/{id}")
+    public Object updateIncome(@PathVariable UUID id, @Valid @RequestBody CreateIncomeRequest request) {
+        return personal.updateIncome(
+                id, request.amountMinor(), request.source(), request.description(), request.occurredOn());
+    }
+
+    @DeleteMapping("/income/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteIncome(@PathVariable UUID id) {
+        personal.deleteIncome(id);
+    }
+
     @GetMapping("/budgets")
     public List<?> budgets(@RequestParam(required = false) String month) {
         return personal.budgets(month);
@@ -68,6 +99,17 @@ public class PersonalFinanceController {
     @PutMapping("/budgets")
     public List<?> saveBudget(@Valid @RequestBody UpsertBudgetRequest request) {
         return personal.saveBudget(request.categoryId(), request.yearMonth(), request.limitMinor());
+    }
+
+    @PutMapping("/budgets/{id}")
+    public List<?> updateBudget(@PathVariable UUID id, @Valid @RequestBody UpsertBudgetRequest request) {
+        return personal.updateBudget(id, request.categoryId(), request.limitMinor());
+    }
+
+    @DeleteMapping("/budgets/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteBudget(@PathVariable UUID id) {
+        personal.deleteBudget(id);
     }
 
     @GetMapping("/summary")

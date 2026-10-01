@@ -352,11 +352,11 @@ class GroupDetailScreen extends ConsumerWidget {
 
   Future<void> _addPerson(BuildContext context, WidgetRef ref) async {
     final name = TextEditingController();
-    await showDialog<void>(
+    await showFsSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add a name'),
-        content: Column(
+      builder: (ctx) => FsSheetForm(
+        title: 'Add a name',
+        body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Name on this split')),
@@ -454,7 +454,7 @@ class GroupDetailScreen extends ConsumerWidget {
                     final payload = (
                       description: desc.text.trim(),
                       amountMinor: (rupee * 100).round(),
-                      paidBy: paidBy!,
+                      paidBy: paidBy,
                       splitMethod: 'EQUAL',
                       shares: [for (final m in shareMembers) {'memberId': m.id}],
                     );

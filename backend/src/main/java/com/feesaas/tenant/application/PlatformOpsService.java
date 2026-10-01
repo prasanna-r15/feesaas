@@ -205,9 +205,9 @@ public class PlatformOpsService {
 
     @PreAuthorize("hasPermission(null, 'platform.tenants.manage')")
     public List<CustomerRepository.CustomerRow> members(UUID tenantId, String query) {
-        return executor.call(TenantScope.platformAdmin(), () -> {
+        return executor.call(TenantScope.tenant(tenantId), () -> {
             require(tenantId);
-            return executor.call(TenantScope.tenant(tenantId), () -> customers.list(query, null));
+            return customers.list(query, null);
         });
     }
 
