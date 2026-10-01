@@ -134,7 +134,7 @@ class SessionController extends StateNotifier<SessionState> {
       deviceId: await _store.deviceId(),
     );
     await _store.saveTokens(access: tokens.accessToken, refresh: tokens.refreshToken);
-    await _loadBootstrap();
+    await _loadBootstrap(rethrowOnError: true);
   }
 
   Future<void> completeOnboarding() async {
@@ -166,7 +166,7 @@ class SessionController extends StateNotifier<SessionState> {
     state = SessionState.signedOut;
   }
 
-  Future<void> _loadBootstrap() async {
+  Future<void> _loadBootstrap({bool rethrowOnError = false}) async {
     try {
       final bootstrap = await _api.bootstrap();
       final config = TenantConfig(bootstrap);
@@ -183,6 +183,9 @@ class SessionController extends StateNotifier<SessionState> {
         _ref.read(tenantConfigProvider.notifier).state = null;
         state = SessionState.signedOut;
         return;
+      }
+      if (rethrowOnError) {
+        rethrow;
       }
       final refresh = await _store.readRefresh();
       if (refresh != null) {

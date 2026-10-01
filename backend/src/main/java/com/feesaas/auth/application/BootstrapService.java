@@ -12,6 +12,8 @@ import com.feesaas.shared.security.CurrentUser;
 import com.feesaas.shared.security.PermissionLookup;
 import com.feesaas.shared.tenancy.TenantClaims;
 import com.feesaas.shared.tenancy.TenantContext;
+import com.feesaas.shared.tenancy.TenantExecutor;
+import com.feesaas.shared.tenancy.TenantScope;
 import com.feesaas.tenant.infra.TenantRepository;
 import com.feesaas.tenant.infra.TenantRepository.TenantRow;
 import java.util.ArrayList;
@@ -29,6 +31,7 @@ public class BootstrapService {
     private final TenantRepository tenants;
     private final PermissionLookup permissionLookup;
     private final IdentityRepository identity;
+    private final TenantExecutor executor;
     private final ObjectMapper json;
 
     public BootstrapService(
@@ -36,11 +39,13 @@ public class BootstrapService {
             TenantRepository tenants,
             PermissionLookup permissionLookup,
             IdentityRepository identity,
+            TenantExecutor executor,
             ObjectMapper json) {
         this.users = users;
         this.tenants = tenants;
         this.permissionLookup = permissionLookup;
         this.identity = identity;
+        this.executor = executor;
         this.json = json;
     }
 
@@ -61,15 +66,7 @@ public class BootstrapService {
         permissions.sort(String::compareTo);
         TenantSnapshot tenant = null;
         if (user.tenantId() != null) {
-            TenantRow row = tenants.findById(user.tenantId())
-                    .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "Tenant not found."));
-            Map<String, String> labels = parseLabels(tenants.labelsJson(user.tenantId()).orElse("{}"));
-            tenant = new TenantSnapshot(
-                    row.id(), row.name(), row.slug(), row.businessType(), row.status(),
-                    row.timezone(), row.currency(), labels, tenants.modules(row.id()),
-                    row.logoBase64(),
-                    row.displayName() == null ? row.name() : row.displayName(),
-                    row.accentColor());
+            tenant = tenantSnapshot(user.tenantId());
         }
         List<UserContext> contexts = new ArrayList<>();
         for (ContextRow row : identity.memberships(userId)) {
@@ -117,6 +114,28 @@ public class BootstrapService {
             return new UserContext("PLATFORM", TenantClaims.PLATFORM_ROLE, null, null, null, "Platform");
         }
         return contexts.isEmpty() ? null : contexts.getFirst();
+    }
+
+    private TenantSnapshot tenantSnapshot(UUID tenantId) {
+        TenantScope current = TenantContext.current().orElse(TenantScope.NONE);
+        if (tenantId.equals(current.tenantId()) || current.platform()) {
+            return readTenantSnapshot(tenantId);
+        }
+        return executor.call(
+                TenantScope.tenant(tenantId).withUser(CurrentUser.id()),
+                () -> readTenantSnapshot(tenantId));
+    }
+
+    private TenantSnapshot readTenantSnapshot(UUID tenantId) {
+        TenantRow row = tenants.findById(tenantId)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "Tenant not found."));
+        Map<String, String> labels = parseLabels(tenants.labelsJson(tenantId).orElse("{}"));
+        return new TenantSnapshot(
+                row.id(), row.name(), row.slug(), row.businessType(), row.status(),
+                row.timezone(), row.currency(), labels, tenants.modules(row.id()),
+                row.logoBase64(),
+                row.displayName() == null ? row.name() : row.displayName(),
+                row.accentColor());
     }
 
     private static UserContext toContext(ContextRow row) {

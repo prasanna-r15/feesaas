@@ -24,7 +24,8 @@ Future<void> swapWorkspace(BuildContext context, WidgetRef ref, UserContext next
   try {
     await ref.read(sessionControllerProvider.notifier).switchContext(next);
     if (context.mounted) {
-      context.go(toMoney ? '/personal' : '/pending');
+      final home = ref.read(tenantConfigProvider)?.homeLocation ?? (toMoney ? '/personal' : '/pending');
+      context.go(home);
     }
   } catch (e) {
     error = e;
