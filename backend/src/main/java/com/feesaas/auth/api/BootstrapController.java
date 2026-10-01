@@ -7,10 +7,7 @@ import com.feesaas.auth.application.AuthService;
 import com.feesaas.auth.application.AuthService.TokenPair;
 import com.feesaas.auth.application.BootstrapService;
 import com.feesaas.auth.application.BootstrapService.Bootstrap;
-import com.feesaas.auth.infra.IdentityRepository;
-import com.feesaas.shared.security.CurrentUser;
 import jakarta.validation.Valid;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,12 +22,10 @@ public class BootstrapController {
 
     private final BootstrapService bootstrap;
     private final AuthService auth;
-    private final IdentityRepository identity;
 
-    public BootstrapController(BootstrapService bootstrap, AuthService auth, IdentityRepository identity) {
+    public BootstrapController(BootstrapService bootstrap, AuthService auth) {
         this.bootstrap = bootstrap;
         this.auth = auth;
-        this.identity = identity;
     }
 
     @GetMapping("/bootstrap")
@@ -74,8 +69,6 @@ public class BootstrapController {
     @PostMapping("/onboarding/complete")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void completeOnboarding() {
-        UUID userId = CurrentUser.id();
-        identity.provisionHats(userId, null, null);
-        identity.completeOnboarding(userId);
+        bootstrap.completeOnboarding();
     }
 }

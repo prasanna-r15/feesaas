@@ -45,6 +45,13 @@ public class BootstrapService {
     }
 
     @Transactional
+    public void completeOnboarding() {
+        UUID userId = CurrentUser.id();
+        identity.provisionHats(userId, null, null);
+        identity.completeOnboarding(userId);
+    }
+
+    @Transactional
     public Bootstrap load() {
         UUID userId = CurrentUser.id();
         AuthUser user = users.findById(userId)
