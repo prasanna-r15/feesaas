@@ -33,4 +33,22 @@ class BackendKeepAliveSchedulerTest {
         assertThat(BackendKeepAliveScheduler.parseEnabled("off")).isFalse();
         assertThat(BackendKeepAliveScheduler.parseEnabled(null)).isTrue();
     }
+
+    @Test
+    void prefersPublicOriginOverLocalhost() {
+        assertThat(BackendKeepAliveScheduler.resolvePingUrl(
+                "AUTO",
+                "https://feesaas.onrender.com",
+                9085)).isEqualTo("https://feesaas.onrender.com/api/health/keep-alive");
+        assertThat(BackendKeepAliveScheduler.resolvePingUrl(
+                "https://api.example.com/",
+                "https://ignored.onrender.com",
+                9085)).isEqualTo("https://api.example.com/api/health/keep-alive");
+        assertThat(BackendKeepAliveScheduler.resolvePingUrl(
+                "https://api.example.com/api/health/keep-alive",
+                null,
+                9085)).isEqualTo("https://api.example.com/api/health/keep-alive");
+        assertThat(BackendKeepAliveScheduler.resolvePingUrl("AUTO", null, 9085))
+                .isEqualTo("http://127.0.0.1:9085/api/health/keep-alive");
+    }
 }
