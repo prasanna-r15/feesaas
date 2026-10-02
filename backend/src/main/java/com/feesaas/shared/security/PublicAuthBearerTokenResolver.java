@@ -22,6 +22,7 @@ public class PublicAuthBearerTokenResolver implements BearerTokenResolver {
             new AntPathRequestMatcher("/api/v1/auth/password/forgot", "POST"),
             new AntPathRequestMatcher("/api/v1/auth/password/reset", "POST"),
             new AntPathRequestMatcher("/actuator/health/**"),
+            new AntPathRequestMatcher("/api/health/keep-alive", "GET"),
             new AntPathRequestMatcher("/v3/api-docs/**"),
             new AntPathRequestMatcher("/swagger-ui/**"),
             new AntPathRequestMatcher("/swagger-ui.html")
